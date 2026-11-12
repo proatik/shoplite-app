@@ -38,6 +38,12 @@ export class MetricsService {
     registers: [this.registry]
   });
 
+  readonly ordersCreated = new Counter({
+    name: 'orders_created_total',
+    help: 'Orders saved as PENDING and pushed onto the queue.',
+    registers: [this.registry]
+  });
+
   constructor(redis: RedisService) {
     new Gauge({
       name: 'order_queue_depth',

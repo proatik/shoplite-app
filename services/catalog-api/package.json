@@ -12,7 +12,8 @@
     "start": "node --require ./dist/tracing.js dist/main",
     "start:dev": "nest start --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run",
+    "test": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
     "lint": "oxlint --type-aware src/ && depcruise src --config .dependency-cruiser.json"
   },
   "dependencies": {

@@ -5,7 +5,9 @@ import { ChaosModule } from '@/core/chaos/chaos.module';
 import { HealthModule } from '@/core/health/health.module';
 import { MetricsModule } from '@/core/metrics/metrics.module';
 import { AppConfigModule } from '@/core/config/config.module';
+import { OrdersModule } from '@/modules/orders/orders.module';
 import { DatabaseModule } from '@/core/database/database.module';
+import { OrderQueueModule } from '@/core/queue/order-queue.module';
 import { ProductsModule } from '@/modules/products/products.module';
 
 @Module({
@@ -13,10 +15,12 @@ import { ProductsModule } from '@/modules/products/products.module';
     RedisModule,
     ChaosModule,
     HealthModule,
+    OrdersModule,
     MetricsModule,
     ProductsModule,
     DatabaseModule,
-    AppConfigModule
+    AppConfigModule,
+    OrderQueueModule
   ]
 })
 export class AppModule {}
