@@ -9,3 +9,8 @@
     name: k3s-agent
     state: restarted
     daemon_reload: true
+
+- name: Restart k3s for the credential provider
+  ansible.builtin.systemd_service:
+    name: "{{ 'k3s' if inventory_hostname in groups['k3s_server'] else 'k3s-agent' }}"
+    state: restarted
