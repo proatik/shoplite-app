@@ -1,6 +1,11 @@
 packages:
   - 'services/*'
   - 'packages/*'
+allowBuilds:
+  esbuild: true
 minimumReleaseAge: 1440
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
+# types-only package published before npm provenance existed; every @types/node 22 release depends on it.
+trustPolicyExclude:
+  - undici-types@6.21.0
