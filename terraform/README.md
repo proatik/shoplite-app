@@ -51,8 +51,17 @@ terraform output -raw github_variables | gh variable set -R proatik/shoplite-app
 State locking uses S3's native lock file (`use_lockfile`), so no DynamoDB table is needed.
 `apply` writes `ansible/inventories/aws/hosts.yaml` (ignored by Git), which reaches every node by
 instance id through an SSM session, or by private address through the bastion. Run
-`terraform destroy` with the same variables when the session ends; the GitHub variables then point
-at an account that no longer exists, so CI simply skips publishing and planning again.
+`terraform destroy` with the same variables when the session ends, and delete the GitHub
+variables, which would otherwise point CI at an account that no longer exists:
+
+```bash
+for name in AWS_REGION AWS_ROLE_ARN AWS_PLAN_ROLE_ARN TF_STATE_BUCKET TF_SSH_PUBLIC_KEY \
+  TF_SSH_PRIVATE_KEY_PATH TF_BUDGET_EMAIL TF_ADMIN_ACCESS TF_ADMIN_CIDR; do
+  gh variable delete "$name" -R proatik/shoplite-app
+done
+```
+
+With the variables gone, CI skips publishing and planning again.
 
 ## CI
 
