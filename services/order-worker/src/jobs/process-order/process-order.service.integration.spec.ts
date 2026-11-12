@@ -8,13 +8,19 @@ import { ProcessOrderService } from '@/jobs/process-order/process-order.service'
 
 import type { EnvService } from '@/core/config/env.service';
 
-const env = {
-  postgresUrl: process.env.POSTGRES_URL ?? '',
-  postgresPoolMax: 2
-} as EnvService;
+const SLOW_TEST_TIMEOUT_MS = 15_000;
+
+function envWith(flags: { leak?: boolean; slowDb?: boolean }): EnvService {
+  return {
+    postgresUrl: process.env.POSTGRES_URL ?? '',
+    postgresPoolMax: 2,
+    chaosMemoryLeak: flags.leak ?? false,
+    chaosSlowDb: flags.slowDb ?? false
+  } as EnvService;
+}
 
 describe('ProcessOrderService (Postgres)', () => {
-  const database = new DatabaseService(env);
+  const database = new DatabaseService(envWith({}));
   let productId: number;
 
   async function placeOrder(quantity: number): Promise<number> {
@@ -71,7 +77,7 @@ describe('ProcessOrderService (Postgres)', () => {
   });
 
   it('completes an order in 1 to 2 seconds and takes its stock', async () => {
-    const processor = new ProcessOrderService(database);
+    const processor = new ProcessOrderService(envWith({}), database);
     const id = await placeOrder(2);
     const started = Date.now();
 
@@ -86,7 +92,7 @@ describe('ProcessOrderService (Postgres)', () => {
   });
 
   it('fails an order when the stock ran out, leaving the stock as it was', async () => {
-    const processor = new ProcessOrderService(database);
+    const processor = new ProcessOrderService(envWith({}), database);
     const id = await placeOrder(3);
 
     await database.db.update(products).set({ stock: 1 });
@@ -97,7 +103,7 @@ describe('ProcessOrderService (Postgres)', () => {
   });
 
   it('skips an order that is no longer PENDING', async () => {
-    const processor = new ProcessOrderService(database);
+    const processor = new ProcessOrderService(envWith({}), database);
     const id = await placeOrder(1);
 
     await database.db
@@ -107,5 +113,33 @@ describe('ProcessOrderService (Postgres)', () => {
 
     await expect(processor.process(id)).resolves.toBeNull();
     expect(await stock()).toBe(3);
+  });
+
+  it(
+    'waits 2 seconds before each database update with CHAOS_SLOW_DB',
+    async () => {
+      const processor = new ProcessOrderService(
+        envWith({ slowDb: true }),
+        database
+      );
+      const id = await placeOrder(1);
+      const started = Date.now();
+
+      await expect(processor.process(id)).resolves.toBe('COMPLETED');
+      expect(Date.now() - started).toBeGreaterThanOrEqual(5000);
+    },
+    SLOW_TEST_TIMEOUT_MS
+  );
+
+  it('keeps a growing in-memory list with CHAOS_MEMORY_LEAK', async () => {
+    const processor = new ProcessOrderService(
+      envWith({ leak: true }),
+      database
+    );
+
+    await processor.process(await placeOrder(1));
+    await processor.process(await placeOrder(1));
+
+    expect(processor['leaked']).toHaveLength(2);
   });
 });

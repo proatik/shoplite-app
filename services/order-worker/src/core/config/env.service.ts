@@ -26,4 +26,12 @@ export class EnvService {
   get postgresPoolMax(): number {
     return this.get('POSTGRES_POOL_MAX');
   }
+
+  get chaosMemoryLeak(): boolean {
+    return this.get('CHAOS_MEMORY_LEAK');
+  }
+
+  get chaosSlowDb(): boolean {
+    return this.get('CHAOS_SLOW_DB');
+  }
 }

@@ -6,10 +6,12 @@ import { eq, and, gte, sql } from 'drizzle-orm';
 import { dbSpan } from '@shoplite/shared';
 import { orders, products } from '@shoplite/database';
 
+import { EnvService } from '@/core/config/env.service';
 import { DatabaseService } from '@/core/database/database.service';
 import {
   MIN_PROCESSING_MS,
-  PROCESSING_SPREAD_MS
+  PROCESSING_SPREAD_MS,
+  LEAKED_BYTES_PER_ORDER
 } from '@/jobs/process-order/process-order.constants';
 
 import type { OrderStatus } from '@shoplite/database';
@@ -18,7 +20,12 @@ export type ProcessedStatus = Extract<OrderStatus, 'COMPLETED' | 'FAILED'>;
 
 @Injectable()
 export class ProcessOrderService {
-  constructor(private readonly database: DatabaseService) {}
+  private readonly leaked: Buffer[] = [];
+
+  constructor(
+    private readonly env: EnvService,
+    private readonly database: DatabaseService
+  ) {}
 
   async process(orderId: number): Promise<ProcessedStatus | null> {
     // claim moves only a pending order, so a message seen twice runs once.
@@ -28,10 +35,18 @@ export class ProcessOrderService {
 
     await sleep(MIN_PROCESSING_MS + Math.random() * PROCESSING_SPREAD_MS);
 
-    return await this.finish(orderId);
+    const status = await this.finish(orderId);
+
+    if (this.env.chaosMemoryLeak) {
+      this.leaked.push(Buffer.alloc(LEAKED_BYTES_PER_ORDER, orderId));
+    }
+
+    return status;
   }
 
   private async claim(orderId: number): Promise<boolean> {
+    await this.slowDownIfAsked();
+
     const claimed = await dbSpan(
       'UPDATE',
       'orders',
@@ -47,6 +62,8 @@ export class ProcessOrderService {
   }
 
   private async finish(orderId: number): Promise<ProcessedStatus> {
+    await this.slowDownIfAsked();
+
     return await dbSpan(
       'UPDATE',
       'orders',
@@ -81,5 +98,11 @@ export class ProcessOrderService {
           return status;
         })
     );
+  }
+
+  private async slowDownIfAsked(): Promise<void> {
+    if (this.env.chaosSlowDb) {
+      await this.database.db.execute(sql`select pg_sleep(2)`);
+    }
   }
 }
