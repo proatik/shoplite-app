@@ -6,6 +6,7 @@ import { HealthModule } from '@/core/health/health.module';
 import { MetricsModule } from '@/core/metrics/metrics.module';
 import { AppConfigModule } from '@/core/config/config.module';
 import { DatabaseModule } from '@/core/database/database.module';
+import { ProductsModule } from '@/modules/products/products.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { DatabaseModule } from '@/core/database/database.module';
     ChaosModule,
     HealthModule,
     MetricsModule,
+    ProductsModule,
     DatabaseModule,
     AppConfigModule
   ]
