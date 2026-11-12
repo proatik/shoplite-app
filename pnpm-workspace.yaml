@@ -2,7 +2,11 @@ packages:
   - 'services/*'
   - 'packages/*'
 allowBuilds:
+  '@swc/core': false
   esbuild: true
+injectWorkspacePackages: true
+syncInjectedDepsAfterScripts:
+  - build
 minimumReleaseAge: 1440
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
