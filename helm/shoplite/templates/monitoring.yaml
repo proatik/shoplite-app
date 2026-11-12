@@ -1,0 +1,58 @@
+{{- if .Values.monitoring.enabled }}
+# order-worker serves no traffic, so this service exists only for the metrics scrape.
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-worker
+  labels: {{- include "shoplite.labels" "order-worker" | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: order-worker }
+  ports:
+    - { name: http, port: 3030, targetPort: http }
+{{- range list "catalog-api" "order-worker" }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ . }}
+  labels: {{- include "shoplite.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels: { app.kubernetes.io/name: {{ . }} }
+  endpoints:
+    - { port: http, path: /metrics, interval: 15s }
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: metrics-from-monitoring
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: In, values: [catalog-api, order-worker] }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ .Values.monitoring.namespace }} }
+      ports:
+        - { protocol: TCP, port: 3000 }
+        - { protocol: TCP, port: 3030 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: traces-to-monitoring
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: In, values: [catalog-api, order-worker] }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ .Values.monitoring.namespace }} }
+      ports:
+        - { protocol: TCP, port: 4318 }
+{{- end }}

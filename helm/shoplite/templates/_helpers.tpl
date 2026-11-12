@@ -29,3 +29,11 @@ allowPrivilegeEscalation: false
 readOnlyRootFilesystem: true
 capabilities: { drop: [ALL] }
 {{- end }}
+
+{{- define "shoplite.tracing" -}}
+{{- if .Values.monitoring.enabled }}
+OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.monitoring.otlpEndpoint }}
+{{- else }}
+OTEL_SDK_DISABLED: 'true'
+{{- end }}
+{{- end }}

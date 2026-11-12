@@ -6,7 +6,7 @@ metadata:
 data:
   PORT: '3000'
   REDIS_URL: redis://redis:6379
-  OTEL_SDK_DISABLED: 'true'
+  {{- include "shoplite.tracing" . | nindent 2 }}
   CHAOS_LATENCY_MS: {{ .Values.catalogApi.chaos.latencyMs | quote }}
   CHAOS_ERROR_RATE: {{ .Values.catalogApi.chaos.errorRate | quote }}
 ---
@@ -18,6 +18,6 @@ metadata:
 data:
   PORT: '3030'
   REDIS_URL: redis://redis:6379
-  OTEL_SDK_DISABLED: 'true'
+  {{- include "shoplite.tracing" . | nindent 2 }}
   CHAOS_MEMORY_LEAK: {{ .Values.orderWorker.chaos.memoryLeak | quote }}
   CHAOS_SLOW_DB: {{ .Values.orderWorker.chaos.slowDb | quote }}
