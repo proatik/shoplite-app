@@ -105,9 +105,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-workspace
-      - run: pnpm --filter "./packages/**" --if-present run test
-      - run: pnpm --filter catalog-api run test
-      - run: pnpm --filter catalog-api run test:integration
+      # vitest writes one report per run into the job summary, so each run gets a heading.
+      - name: shared packages unit tests
+        run: |
+          echo '### Shared packages · unit' >> "$GITHUB_STEP_SUMMARY"
+          pnpm --filter "./packages/**" --if-present run test
+      - name: catalog api unit tests
+        run: |
+          echo '### Catalog API · unit' >> "$GITHUB_STEP_SUMMARY"
+          pnpm --filter catalog-api run test
+      - name: catalog api integration tests
+        run: |
+          echo '### Catalog API · integration' >> "$GITHUB_STEP_SUMMARY"
+          pnpm --filter catalog-api run test:integration
 
   worker:
     name: Worker tests
@@ -119,8 +129,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-workspace
-      - run: pnpm --filter order-worker run test
-      - run: pnpm --filter order-worker run test:integration
+      - name: order worker unit tests
+        run: |
+          echo '### Order worker · unit' >> "$GITHUB_STEP_SUMMARY"
+          pnpm --filter order-worker run test
+      - name: order worker integration tests
+        run: |
+          echo '### Order worker · integration' >> "$GITHUB_STEP_SUMMARY"
+          pnpm --filter order-worker run test:integration
 
   web:
     name: Web tests
@@ -131,7 +147,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-workspace
-      - run: pnpm --filter web run test
+      - name: web unit tests
+        run: |
+          echo '### Web · unit' >> "$GITHUB_STEP_SUMMARY"
+          pnpm --filter web run test
 
   # runs alongside lint and the tests; only publishing waits for them.
   images:
