@@ -82,14 +82,14 @@ jobs:
             docker run --rm -i "$HADOLINT_IMAGE" < "services/$service/Dockerfile"
           done
 
-  test:
-    name: Unit and integration tests
+  api:
+    name: API tests
     needs: changes
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.worker == 'true' || needs.changes.outputs.web == 'true'
+    if: needs.changes.outputs.api == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # throwaway datastores matching the local defaults the test setup falls back to.
-    services:
+    services: &datastores
       postgres:
         image: postgres:16.4-alpine
         env:
@@ -105,21 +105,35 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-workspace
-      - if: needs.changes.outputs.api == 'true' || needs.changes.outputs.worker == 'true'
-        run: pnpm --filter "./packages/**" --if-present run test
-      # both integration suites share the shoplite_test database, so they run one after the other.
-      - if: needs.changes.outputs.api == 'true'
-        run: |
-          pnpm --filter catalog-api run test
-          pnpm --filter catalog-api run test:integration
-      - if: needs.changes.outputs.worker == 'true'
-        run: |
-          pnpm --filter order-worker run test
-          pnpm --filter order-worker run test:integration
-      - if: needs.changes.outputs.web == 'true'
-        run: pnpm --filter web run test
+      - run: pnpm --filter "./packages/**" --if-present run test
+      - run: pnpm --filter catalog-api run test
+      - run: pnpm --filter catalog-api run test:integration
 
-  # runs alongside lint and test; only publishing waits for all three.
+  worker:
+    name: Worker tests
+    needs: changes
+    if: needs.changes.outputs.worker == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services: *datastores
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-workspace
+      - run: pnpm --filter order-worker run test
+      - run: pnpm --filter order-worker run test:integration
+
+  web:
+    name: Web tests
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-workspace
+      - run: pnpm --filter web run test
+
+  # runs alongside lint and the tests; only publishing waits for them.
   images:
     name: Build, scan and smoke-test images
     needs: changes
@@ -194,11 +208,12 @@ jobs:
   # rebuilt from the layer cache the images job just wrote, so the pushed layers are the tested ones.
   publish:
     name: Publish images to ECR
-    needs: [changes, lint, test, images]
+    needs: [changes, lint, api, worker, web, images]
+    # a test job skipped because its part did not change still counts as passed.
     if: >-
       always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
       vars.AWS_ROLE_ARN != '' && needs.lint.result == 'success' && needs.images.result == 'success' &&
-      (needs.test.result == 'success' || needs.test.result == 'skipped')
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
