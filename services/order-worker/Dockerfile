@@ -24,23 +24,17 @@ RUN pnpm --filter "order-worker..." run build \
  && pnpm --filter order-worker run bundle
 
 
-# source of the node binary only; the runtime below ships nothing else from it.
+# source of the node binary and the C libraries it was built against; nothing else ships.
 FROM node:22-alpine@sha256:0e1754758c2df4cfa3e68d59e2e1b7374bb7fd9ea6328eaaacf15cc934af8202 AS node
-
-
-# the C libraries node links against, from the same Alpine release as the binary.
-FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS libs
-
-RUN apk add --no-cache libstdc++ libgcc
 
 
 # no OS, shell or package manager: only node, its libraries and the bundle (x86-64).
 FROM scratch AS runtime
 
-COPY --from=libs /lib/ld-musl-x86_64.so.1 /lib/ld-musl-x86_64.so.1
-COPY --from=libs /lib/ld-musl-x86_64.so.1 /lib/libc.musl-x86_64.so.1
-COPY --from=libs /usr/lib/libstdc++.so.6 /usr/lib/libstdc++.so.6
-COPY --from=libs /usr/lib/libgcc_s.so.1 /usr/lib/libgcc_s.so.1
+COPY --from=node /lib/ld-musl-x86_64.so.1 /lib/ld-musl-x86_64.so.1
+COPY --from=node /lib/ld-musl-x86_64.so.1 /lib/libc.musl-x86_64.so.1
+COPY --from=node /usr/lib/libstdc++.so.6 /usr/lib/libstdc++.so.6
+COPY --from=node /usr/lib/libgcc_s.so.1 /usr/lib/libgcc_s.so.1
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 
 ENV NODE_ENV=production

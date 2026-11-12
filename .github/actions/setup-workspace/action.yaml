@@ -1,0 +1,42 @@
+name: Setup workspace
+description: Installs Node 22, the pinned pnpm through Corepack and the dependencies, then builds the shared packages. Run actions/checkout first.
+
+inputs:
+  save-cache:
+    description: Save the pnpm store after install; set it in one job per workflow so parallel jobs never race.
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: 22
+        package-manager-cache: false
+
+    # corepack reads packageManager from package.json, so CI runs the same pnpm as local work.
+    - run: corepack enable
+      shell: bash
+
+    - id: store
+      run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      shell: bash
+
+    - id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.store.outputs.path }}
+        key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: pnpm-store-${{ runner.os }}-
+
+    - run: pnpm install --frozen-lockfile
+      shell: bash
+
+    - if: inputs.save-cache == 'true' && steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.store.outputs.path }}
+        key: ${{ steps.restore.outputs.cache-primary-key }}
+
+    - run: pnpm --filter "./packages/**" run build
+      shell: bash

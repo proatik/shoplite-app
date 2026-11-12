@@ -1,0 +1,247 @@
+name: CI
+
+on:
+  pull_request:
+    paths-ignore: ['**.md', 'docs/**']
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**']
+
+# a newer push to the same branch cancels the run it replaces.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+  HADOLINT_IMAGE: hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
+  TRIVY_IMAGE: aquasec/trivy:0.69.3@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c
+  SERVICES: catalog-api order-worker web
+  MAX_IMAGE_BYTES: '150000000'
+
+jobs:
+  changes:
+    name: Detect what changed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      api: ${{ steps.compute.outputs.api }}
+      worker: ${{ steps.compute.outputs.worker }}
+      web: ${{ steps.compute.outputs.web }}
+      images: ${{ steps.compute.outputs.images }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # workspace, lockfile and workflow changes touch everything, as does an unknown base commit.
+      - name: work out which parts this change touches
+        id: compute
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then base="$PR_BASE"; else base="$PUSH_BEFORE"; fi
+          if git cat-file -e "$base^{commit}" 2>/dev/null; then
+            files=$(git diff --name-only "$base" HEAD)
+          else
+            files="everything"
+          fi
+          touched() {
+            [ "$files" = "everything" ] && return 0
+            printf '%s\n' "$files" | grep -Eq "^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|\.github/|$1)"
+          }
+          flag() { if touched "$2"; then echo "$1=true"; else echo "$1=false"; fi >> "$GITHUB_OUTPUT"; }
+          flag api 'services/catalog-api/|packages/'
+          flag worker 'services/order-worker/|packages/'
+          flag web 'services/web/'
+          flag images 'services/|packages/|docker-compose.yml|\.dockerignore|Makefile|scripts/'
+          cat "$GITHUB_OUTPUT"
+
+  lint:
+    name: Format, typecheck and lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-workspace
+        with:
+          save-cache: 'true'
+      - run: pnpm format:check
+      - run: pnpm -r --if-present run typecheck
+      - run: pnpm -r --if-present run lint
+      # trivy cannot read the pnpm 12 lockfile, so the npm advisory database checks the bundled dependencies.
+      - run: pnpm audit --prod --audit-level critical
+      - name: hadolint every dockerfile
+        run: |
+          for service in $SERVICES; do
+            echo "services/$service/Dockerfile"
+            docker run --rm -i "$HADOLINT_IMAGE" < "services/$service/Dockerfile"
+          done
+
+  api:
+    name: API tests
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # throwaway datastores matching the local defaults the test setup falls back to.
+    services: &datastores
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: shoplite
+          POSTGRES_PASSWORD: shoplite-local
+          POSTGRES_DB: shoplite
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U shoplite" --health-interval 5s --health-retries 10
+      redis:
+        image: redis:7.4-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-workspace
+      - run: pnpm --filter "./packages/**" --if-present run test
+      - run: pnpm --filter catalog-api run test
+      - run: pnpm --filter catalog-api run test:integration
+
+  worker:
+    name: Worker tests
+    needs: changes
+    if: needs.changes.outputs.worker == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services: *datastores
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-workspace
+      - run: pnpm --filter order-worker run test
+      - run: pnpm --filter order-worker run test:integration
+
+  web:
+    name: Web tests
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-workspace
+      - run: pnpm --filter web run test
+
+  # runs alongside lint and the tests; only publishing waits for them.
+  images:
+    name: Build, scan and smoke-test images
+    needs: changes
+    if: needs.changes.outputs.images == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # bake builds the three compose images in parallel and keeps their layers in the actions cache.
+      - name: build the images
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
+        with:
+          files: docker-compose.yml
+          load: true
+          set: |
+            catalog-api.cache-from=type=gha,scope=catalog-api
+            catalog-api.cache-to=type=gha,scope=catalog-api,mode=max
+            order-worker.cache-from=type=gha,scope=order-worker
+            order-worker.cache-to=type=gha,scope=order-worker,mode=max
+            web.cache-from=type=gha,scope=web
+            web.cache-to=type=gha,scope=web,mode=max
+
+      - name: tag the images with the short commit sha
+        run: |
+          echo "TAG=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          for service in $SERVICES; do
+            docker tag "shoplite/$service:local" "shoplite/$service:${GITHUB_SHA::7}"
+          done
+
+      - name: every image stays under 150 MB
+        run: |
+          for service in $SERVICES; do
+            size=$(docker image inspect --format '{{.Size}}' "shoplite/$service:$TAG")
+            echo "$service: $size bytes"
+            [ "$size" -lt "$MAX_IMAGE_BYTES" ] || { echo "$service is over 150 MB"; exit 1; }
+          done
+
+      # the vulnerability database is downloaded at most once a day and shared by all three scans.
+      - id: day
+        run: echo "date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+      - id: trivy-db
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/trivy
+          key: trivy-db-${{ steps.day.outputs.date }}
+          restore-keys: trivy-db-
+      - name: fail on critical vulnerabilities
+        run: |
+          for service in $SERVICES; do
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$HOME/.cache/trivy:/root/.cache/trivy" \
+              "$TRIVY_IMAGE" image --scanners vuln --severity CRITICAL --exit-code 1 --skip-version-check --no-progress "shoplite/$service:$TAG"
+          done
+      - if: steps.trivy-db.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/trivy
+          key: ${{ steps.trivy-db.outputs.cache-primary-key }}
+
+      # the stack starts from the images built above, so the smoke test checks exactly what ships.
+      - name: start the stack and place an order end to end
+        run: |
+          docker compose up -d --wait --no-build
+          make smoke
+      - if: failure()
+        run: docker compose logs --no-color --tail 100
+
+  # rebuilt from the layer cache the images job just wrote, so the pushed layers are the tested ones.
+  publish:
+    name: Publish images to ECR
+    needs: [changes, lint, api, worker, web, images]
+    # a test job skipped because its part did not change still counts as passed.
+    if: >-
+      always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      vars.AWS_ROLE_ARN != '' && needs.lint.result == 'success' && needs.images.result == 'success' &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
+        with:
+          files: docker-compose.yml
+          load: true
+          set: |
+            catalog-api.cache-from=type=gha,scope=catalog-api
+            order-worker.cache-from=type=gha,scope=order-worker
+            web.cache-from=type=gha,scope=web
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+      - name: push the images tagged with the short commit sha
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          for service in $SERVICES; do
+            image="$REGISTRY/shoplite/$service:${GITHUB_SHA::7}"
+            docker tag "shoplite/$service:local" "$image"
+            docker push "$image"
+          done
