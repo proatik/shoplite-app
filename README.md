@@ -124,6 +124,11 @@ The signals link to each other, so one order can be followed from an alert to th
 2. A trace runs API → `orders:pending` → worker → database, and opens the log lines that carry its id.
 3. A log line's `trace_id` opens the trace it belongs to.
 
+## AWS infrastructure
+
+`terraform/` builds the VPC, the private k3s nodes, the public ALB, the ECR repositories and the
+CI roles; see [terraform/README.md](terraform/README.md) for the steps and the security choices.
+
 ## Repository layout
 
 ```text
@@ -137,6 +142,10 @@ shoplite-app/
 │   └── shared/           logger, tracing, metrics and the queue message format
 ├── helm/
 │   └── shoplite/         one chart for the three services, PostgreSQL and Redis
+├── terraform/
+│   ├── modules/          network, compute, alb, ecr, plus bastion and backup_bucket
+│   ├── envs/aws/         the AWS environment, CI roles, budget and Ansible inventory
+│   └── state/            the S3 bucket that holds Terraform state
 ├── monitoring/
 │   ├── dashboards/       the Golden Signals dashboard, loaded by Grafana's sidecar
 │   ├── alert-rules/      the five alerts as a PrometheusRule
