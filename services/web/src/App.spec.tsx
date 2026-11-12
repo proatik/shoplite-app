@@ -37,6 +37,18 @@ function jsonResponse(body: unknown, status = 200) {
   return Promise.resolve(Response.json(body, { status }));
 }
 
+function storedOrderIds(): number[] {
+  const stored: { id: number }[] = JSON.parse(
+    window.localStorage.getItem('shoplite.orders') ?? '[]'
+  );
+
+  return stored.map((entry) => entry.id);
+}
+
+function failure(status: number, message: string) {
+  return jsonResponse({ statusCode: status, message, error: 'Error' }, status);
+}
+
 const isOrderRequest = (url: unknown) => String(url).startsWith('/api/orders');
 
 const isUrl = (url: unknown, expected: string) => String(url) === expected;
@@ -171,25 +183,83 @@ describe('catalogue pagination', () => {
 });
 
 describe('product page', () => {
-  it('adds to the cart and updates the badge', async () => {
+  it('places an order and opens its status page', async () => {
     window.history.pushState(null, '', '/products/1');
-    fetchMock.mockImplementation(() => jsonResponse(products[0]));
+    fetchMock.mockImplementation((input, init) => {
+      if (init?.method === 'POST') {
+        return jsonResponse({ id: 42, status: 'PENDING' }, 201);
+      }
+      return isOrderRequest(input)
+        ? jsonResponse(order('PENDING'))
+        : jsonResponse(products[0]);
+    });
     const user = userEvent.setup();
     renderApp();
 
     const quantity = await screen.findByLabelText('Quantity');
     await user.clear(quantity);
     await user.type(quantity, '2');
-    await user.click(screen.getByText('Add to cart'));
+    await user.click(screen.getByText('Place order'));
 
-    expect(screen.getByLabelText('Cart, 2 items')).toBeTruthy();
-    expect(JSON.parse(window.localStorage.getItem('shoplite.cart')!)).toEqual([
-      { productId: 1, quantity: 2 }
+    expect(await screen.findByLabelText('Order progress')).toBeTruthy();
+    const posts = fetchMock.mock.calls.filter(
+      ([, init]) => init?.method === 'POST'
+    );
+    expect(posts.map(([input, init]) => [input, init?.body])).toEqual([
+      ['/api/orders', JSON.stringify({ product_id: 1, quantity: 2 })]
     ]);
+    expect(currentUrl()).toBe('/orders/42');
+    expect(storedOrderIds()).toEqual([42]);
+  });
 
-    await user.click(screen.getByText('Add to cart'));
+  it('shows the API message and stays when the order fails', async () => {
+    window.history.pushState(null, '', '/products/1');
+    fetchMock.mockImplementation((_input, init) =>
+      init?.method === 'POST'
+        ? failure(409, 'Not enough stock for this product.')
+        : jsonResponse(products[0])
+    );
+    const user = userEvent.setup();
+    renderApp();
 
-    expect(screen.getByLabelText('Cart, 4 items')).toBeTruthy();
+    await user.click(await screen.findByText('Place order'));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Not enough stock for this product.'
+    );
+    expect(currentUrl()).toBe('/products/1');
+    expect(storedOrderIds()).toEqual([]);
+  });
+
+  it('disables the button while the order is pending', async () => {
+    window.history.pushState(null, '', '/products/1');
+    fetchMock.mockImplementation((_input, init) =>
+      init?.method === 'POST'
+        ? new Promise<Response>(() => {})
+        : jsonResponse(products[0])
+    );
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(await screen.findByText('Place order'));
+
+    const button = screen.getByText('Place order').closest('button')!;
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('disables the button when the product is out of stock', async () => {
+    window.history.pushState(null, '', '/products/2');
+    fetchMock.mockImplementation(() => jsonResponse(products[1]));
+    renderApp();
+
+    const button = (await screen.findByText('Place order')).closest('button')!;
+    expect(button.disabled).toBe(true);
+    expect(
+      screen.getByText("This product can't be ordered right now.", {
+        exact: false
+      })
+    ).toBeTruthy();
   });
 
   it('shows the description for a product that has one', async () => {
@@ -265,7 +335,7 @@ describe('product page', () => {
 
     await user.click(screen.getByText('Try again'));
 
-    expect(await screen.findByText('Add to cart')).toBeTruthy();
+    expect(await screen.findByText('Place order')).toBeTruthy();
   });
 });
 
@@ -340,14 +410,6 @@ function seedCart(...lines: ReturnType<typeof cartLine>[]) {
   window.localStorage.setItem('shoplite.cart', JSON.stringify(lines));
 }
 
-function storedOrderIds(): number[] {
-  const stored: { id: number }[] = JSON.parse(
-    window.localStorage.getItem('shoplite.orders') ?? '[]'
-  );
-
-  return stored.map((entry) => entry.id);
-}
-
 const twoProducts = [
   products[0]!,
   {
@@ -359,10 +421,6 @@ const twoProducts = [
     stock: 5
   }
 ];
-
-function failure(status: number, message: string) {
-  return jsonResponse({ statusCode: status, message, error: 'Error' }, status);
-}
 
 describe('cart', () => {
   it('shows lines with the total', async () => {
@@ -535,7 +593,7 @@ describe('my orders', () => {
 });
 
 describe('browser storage', () => {
-  it('renders and tells the user when storage is blocked', async () => {
+  it('still opens the order and tells the user when storage is blocked', async () => {
     window.history.pushState(null, '', '/products/1');
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new DOMException('blocked', 'SecurityError');
@@ -543,16 +601,23 @@ describe('browser storage', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('blocked', 'SecurityError');
     });
-    fetchMock.mockImplementation(() => jsonResponse(products[0]));
+    fetchMock.mockImplementation((input, init) => {
+      if (init?.method === 'POST') {
+        return jsonResponse({ id: 42, status: 'PENDING' }, 201);
+      }
+      return isOrderRequest(input)
+        ? jsonResponse(order('PENDING'))
+        : jsonResponse(products[0]);
+    });
     const user = userEvent.setup();
     renderApp();
 
-    await user.click(await screen.findByText('Add to cart'));
+    await user.click(await screen.findByText('Place order'));
 
     expect((await screen.findByRole('alert')).textContent).toContain(
-      'Your browser is blocking storage'
+      "Your browser is blocking storage, so this order can't be added"
     );
-    expect(screen.getByLabelText('Cart, 0 items')).toBeTruthy();
+    expect(currentUrl()).toBe('/orders/42');
   });
 
   it('resets a corrupt or invalid stored cart', () => {

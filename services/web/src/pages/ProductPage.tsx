@@ -1,20 +1,22 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Info, ShoppingCart } from 'lucide-react';
+import { Info, ShoppingBag } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { cn } from '@/lib/cn';
-import { ApiError } from '@/lib/api';
 import { Link } from '@/components/Link';
-import { useCart } from '@/hooks/useCart';
 import { MAX_QUANTITY } from '@/lib/cart';
 import { Price } from '@/components/Price';
+import { navigate } from '@/lib/navigation';
+import { useToast } from '@/hooks/useToast';
 import { Notice } from '@/components/Notice';
 import { Crumbs } from '@/components/Crumbs';
-import { productQuery } from '@/lib/queries';
+import { ApiError, placeOrder } from '@/lib/api';
 import { Skeleton } from '@/components/Skeleton';
 import { StateBox } from '@/components/StateBox';
+import { useMyOrders } from '@/hooks/useMyOrders';
 import { StockText } from '@/components/StockText';
 import { ProductMedia } from '@/components/ProductMedia';
+import { productQuery, productsQuery } from '@/lib/queries';
 import { Button, buttonClasses } from '@/components/Button';
 import { QuantityStepper } from '@/components/QuantityStepper';
 
@@ -39,11 +41,22 @@ const INFO_CLASSES = 'flex max-w-[520px] flex-col gap-5';
 const TITLE_CLASSES =
   'm-0 text-[26px] leading-[34px] font-[650] tracking-[-0.01em]';
 
-function AddToCart({ product }: { product: Product }) {
-  const { add } = useCart();
+function PlaceOrder({ product }: { product: Product }) {
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const { record } = useMyOrders();
   const [quantity, setQuantity] = useState(1);
   const inStock = product.stock > 0;
   const max = Math.min(product.stock, MAX_QUANTITY);
+  const { mutate, isPending } = useMutation({
+    mutationFn: () => placeOrder(product.id, quantity),
+    onSuccess: ({ id }) => {
+      record(id);
+      navigate(`/orders/${id}`);
+    },
+    onError: (error) => toast(error.message),
+    onSettled: () => queryClient.invalidateQueries(productsQuery())
+  });
 
   return (
     <div className="flex gap-3">
@@ -54,12 +67,13 @@ function AddToCart({ product }: { product: Product }) {
         onChange={setQuantity}
       />
       <Button
+        busy={isPending}
         disabled={!inStock}
-        onClick={() => add(product.id, quantity, max)}
+        onClick={() => mutate()}
         className="h-11 flex-1 text-[15px] [&_svg]:size-4"
       >
-        <ShoppingCart aria-hidden="true" />
-        Add to cart
+        <ShoppingBag aria-hidden="true" />
+        Place order
       </Button>
     </div>
   );
@@ -162,8 +176,7 @@ export function ProductPage({ id }: { id: number }) {
                 icon={<Info aria-hidden="true" />}
                 title="Out of stock"
               >
-                This product can&apos;t be added to your cart right now. Check
-                back later.
+                This product can&apos;t be ordered right now. Check back later.
               </Notice>
             )}
             <div className="flex items-baseline gap-3.5">
@@ -177,7 +190,7 @@ export function ProductPage({ id }: { id: number }) {
               />
               <StockText inStock={inStock} className="text-sm" />
             </div>
-            <AddToCart product={product} />
+            <PlaceOrder product={product} />
           </div>
         </div>
       </div>
