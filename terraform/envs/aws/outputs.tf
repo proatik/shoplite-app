@@ -1,6 +1,11 @@
 output "url" {
-  description = "ShopLite through the public ALB."
+  description = "ShopLite prod through the public ALB."
   value       = "http://${module.alb.dns_name}"
+}
+
+output "dev_url" {
+  description = "ShopLite dev through the public ALB."
+  value       = contains(keys(var.entry_points), "dev") ? "http://${module.alb.dns_name}:${var.entry_points["dev"].listener_port}" : null
 }
 
 output "control_plane_id" {

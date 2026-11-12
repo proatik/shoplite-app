@@ -3,7 +3,7 @@
 Builds the AWS side of ShopLite as the brief's target architecture asks:
 
 ```text
-Internet ──► ALB (public subnets, :80) ──► ingress NodePort on the workers
+Internet ──► ALB :80 (prod), :8080 (dev) ──► ingress NodePorts 30080, 30081 on the workers
                                            │
 private subnets, no public addresses ──────┤
  ├─ control plane (k3s server)
@@ -21,7 +21,7 @@ ECR: web, catalog-api, order-worker · GitHub Actions pushes through OIDC
 | `envs/aws/`             | everything below, the read-only CI plan role, a USD 20 budget alarm and the generated Ansible inventory                                  |
 | `modules/network`       | VPC over two availability zones, two public and two private subnets, internet gateway, NAT gateway                                       |
 | `modules/compute`       | control plane and workers in the private subnets, their security group, and a node role for SSM, pulling from ECR and writing backups    |
-| `modules/alb`           | the public ALB, its security group, and a target group on the workers' ingress NodePort with a `/ping` health check                      |
+| `modules/alb`           | the public ALB with one listener and target group per environment (prod on 80, dev on 8080), each checking `/ping` on the prod NodePort  |
 | `modules/ecr`           | one repository per image (immutable tags, scan on push, lifecycle) and the GitHub OIDC role that may push only to them, only from `main` |
 | `modules/backup_bucket` | the bucket for database dumps                                                                                                            |
 | `modules/bastion`       | only with `admin_access = "bastion"`: one small host in a public subnet, SSH from `admin_cidr` only, forwarding SSH to the nodes only    |

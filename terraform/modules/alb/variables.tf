@@ -23,8 +23,16 @@ variable "target_instance_ids" {
   type        = map(string)
 }
 
-variable "target_port" {
-  description = "NodePort of the ingress controller."
+variable "entry_points" {
+  description = "One listener per environment: the public port and the ingress NodePort it forwards to."
+  type = map(object({
+    listener_port = number
+    node_port     = number
+  }))
+}
+
+variable "health_check_node_port" {
+  description = "NodePort where the ingress controller answers the health check path."
   type        = number
 }
 

@@ -7,7 +7,7 @@ all:
       -o ProxyCommand="${ssh_proxy}"
     admin_cidrs: ${jsonencode(admin_cidrs)}
     node_cidr: ${node_cidr}
-    firewall_ingress_node_port: ${ingress_node_port}
+    firewall_ingress_node_ports: ${jsonencode(ingress_node_ports)}
     backup_s3_bucket: "${backup_bucket}"
   children:
     k3s_server:

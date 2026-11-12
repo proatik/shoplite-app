@@ -82,10 +82,21 @@ variable "root_volume_gb" {
   default     = 30
 }
 
-variable "ingress_node_port" {
-  description = "NodePort the ingress controller exposes to the ALB."
-  type        = number
-  default     = 30080
+variable "entry_points" {
+  description = "Public ALB port and ingress NodePort per environment; prod keeps port 80 as the brief's ShopLite URL."
+  type = map(object({
+    listener_port = number
+    node_port     = number
+  }))
+  default = {
+    prod = { listener_port = 80, node_port = 30080 }
+    dev  = { listener_port = 8080, node_port = 30081 }
+  }
+
+  validation {
+    condition     = contains(keys(var.entry_points), "prod")
+    error_message = "entry_points must include prod, whose NodePort also answers the health check."
+  }
 }
 
 variable "github_repository" {
