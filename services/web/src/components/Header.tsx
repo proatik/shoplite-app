@@ -1,15 +1,8 @@
 import { useState, useEffect } from 'react';
-import {
-  LayoutGrid,
-  ShoppingBag,
-  ShoppingCart,
-  ClipboardList
-} from 'lucide-react';
+import { LayoutGrid, ShoppingBag, ClipboardList } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
 import { Link } from '@/components/Link';
-import { useCart } from '@/hooks/useCart';
-import { CountPill } from '@/components/CountPill';
 
 const SCROLLED_OFFSET_PX = 4;
 
@@ -34,9 +27,7 @@ function useScrolled(): boolean {
 export function Header({ route }: { route: string }) {
   const scrolled = useScrolled();
   const onCatalogue = route === '/' || route.startsWith('/products/');
-  const onCart = route === '/cart';
-  const onOrders = route.startsWith('/orders') || route === '/placed';
-  const { count } = useCart();
+  const onOrders = route.startsWith('/orders');
 
   return (
     <header
@@ -63,16 +54,6 @@ export function Header({ route }: { route: string }) {
           >
             <LayoutGrid aria-hidden="true" />
             Catalogue
-          </Link>
-          <Link
-            href="/cart"
-            aria-label={count === 1 ? 'Cart, 1 item' : `Cart, ${count} items`}
-            aria-current={onCart ? 'page' : undefined}
-            className={NAV_LINK_CLASSES}
-          >
-            <ShoppingCart aria-hidden="true" />
-            Cart
-            <CountPill count={count} />
           </Link>
           <Link
             href="/orders"

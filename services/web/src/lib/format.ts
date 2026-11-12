@@ -19,6 +19,3 @@ export const formatDateTime = (value: string) =>
     hour: 'numeric',
     minute: '2-digit'
   });
-
-export const formatLineCalculation = (quantity: number, price: number) =>
-  quantity === 1 ? 'Qty 1' : `${quantity} × ${formatMoney(price)}`;
