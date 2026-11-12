@@ -28,8 +28,13 @@ kube -n shoplite create secret generic shoplite-db --from-literal=password="$(op
 helm template shoplite ../helm/shoplite -n shoplite --set image.tag=test --set backup.enabled=true \
   --show-only templates/postgres.yaml --show-only templates/backup.yaml | kube -n shoplite apply -f - >/dev/null
 kube -n shoplite wait --for=condition=Ready pod/postgres-0 --timeout=300s >/dev/null
-kube -n shoplite exec postgres-0 -- psql -U shoplite -d shoplite -qc \
-  'CREATE TABLE IF NOT EXISTS backup_check AS SELECT generate_series(1, 42) AS n' >/dev/null
+# a k3s restart from the playbook can hide the pod for a few seconds, so the first exec retries.
+for attempt in $(seq 1 30); do
+  kube -n shoplite exec postgres-0 -- psql -U shoplite -d shoplite -qc \
+    'CREATE TABLE IF NOT EXISTS backup_check AS SELECT generate_series(1, 42) AS n' >/dev/null && break
+  [ "$attempt" = 30 ] && { echo 'FAIL: postgres-0 never accepted the test table'; exit 1; }
+  sleep 2
+done
 
 ansible-playbook -i inventories/test playbooks/backup.yaml
 
@@ -66,6 +71,7 @@ check 'the pinned k3s version runs' "kube get nodes -o wide | grep -q 'v1.37.2+k
 check 'secrets are encrypted at rest' "on_server k3s secrets-encrypt status | grep -q 'Encryption Status: Enabled'"
 check 'the control plane takes no application pods' "kube get node shoplite-server -o jsonpath={.spec.taints[*].key} | grep -q control-plane"
 check 'the bundled traefik is not installed' "! kube get deploy -A | grep -q traefik"
+check 'the kubelets pull from private ecr through the credential provider' "[ \$(for node in server agent; do \"\${compose[@]}\" exec -T \$node sh -c 'journalctl -u k3s -u k3s-agent --no-pager | grep -c image-credential-provider-config=/var/lib/rancher/credentialprovider/config.yaml'; done | grep -vc '^0\$') = 2 ]"
 check 'the kubeconfig was fetched for the owner only' "[ \"\$(stat -c %a ~/.cache/shoplite-ansible/kubeconfig)\" = 600 ]"
 
 as_backup() { on_server sudo -u shoplite-backup env KUBECONFIG=/var/lib/shoplite-backup/kubeconfig "$@"; }
