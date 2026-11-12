@@ -12,6 +12,11 @@ database:
   name: shoplite
   storage: 2Gi
 
+ingress:
+  className: traefik
+  # an empty host matches every host name, such as the ALB's DNS name.
+  host: ''
+
 web:
   replicas: 2
   resources:
