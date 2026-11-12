@@ -1,0 +1,33 @@
+- name: Download the pinned k3s binary and verify its checksum
+  ansible.builtin.get_url:
+    url: '{{ k3s_release_url }}/k3s'
+    checksum: 'sha256:{{ k3s_release_url }}/sha256sum-amd64.txt'
+    dest: /usr/local/bin/k3s
+    mode: '0755'
+    timeout: 120
+  register: k3s_download
+  until: k3s_download is succeeded
+  retries: 3
+  delay: 5
+  vars:
+    k3s_release_url: 'https://github.com/k3s-io/k3s/releases/download/{{ k3s_version | urlencode }}'
+
+- name: Link kubectl to the k3s binary
+  ansible.builtin.file:
+    src: /usr/local/bin/k3s
+    dest: /usr/local/bin/kubectl
+    state: link
+
+- name: Create the k3s config directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    mode: '0700'
+
+- name: Set up the server
+  ansible.builtin.import_tasks: server.yaml
+  when: inventory_hostname in groups['k3s_server']
+
+- name: Set up the agent
+  ansible.builtin.import_tasks: agent.yaml
+  when: inventory_hostname in groups['k3s_agents']

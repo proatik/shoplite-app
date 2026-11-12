@@ -1,0 +1,5 @@
+- name: Back up the database every day
+  hosts: k3s_server
+  become: true
+  roles:
+    - backup

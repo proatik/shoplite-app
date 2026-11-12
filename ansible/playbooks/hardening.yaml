@@ -1,0 +1,10 @@
+- name: Harden every node
+  hosts: all
+  become: true
+  roles:
+    - base
+    - users
+    - ssh
+    - logs
+    - firewall
+    - fail2ban

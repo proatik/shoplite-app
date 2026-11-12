@@ -1,0 +1,22 @@
+- name: Install the acl tools
+  ansible.builtin.apt:
+    name: acl
+
+# chown and chmod: root owns the directory, ops may enter and list it, everyone else is shut out.
+- name: Create /var/log/shoplite for root and the ops group only
+  ansible.builtin.file:
+    path: /var/log/shoplite
+    state: directory
+    owner: root
+    group: '{{ ops_group }}'
+    mode: '0750'
+
+# the one setfacl rule: files created here later are readable by ops whatever group they get.
+- name: Make new log files readable by ops through a default acl
+  ansible.posix.acl:
+    path: /var/log/shoplite
+    entity: '{{ ops_group }}'
+    etype: group
+    permissions: rX
+    default: true
+    state: present

@@ -1,0 +1,20 @@
+- name: Install ufw
+  ansible.builtin.apt:
+    name: ufw
+
+- name: Install the firewall script from linux/firewall
+  ansible.builtin.copy:
+    src: '{{ linux_dir }}/firewall/ufw.sh'
+    dest: /usr/local/sbin/shoplite-firewall
+    mode: '0755'
+
+- name: Apply the inbound rules; only 22, 80 and 443 are open beyond the node network
+  ansible.builtin.command: /usr/local/sbin/shoplite-firewall
+  environment:
+    ADMIN_CIDRS: "{{ admin_cidrs | join(' ') }}"
+    NODE_CIDR: "{{ node_cidr | default('') }}"
+    K3S_ROLE: "{{ 'server' if inventory_hostname in groups['k3s_server'] else 'agent' }}"
+    INGRESS_NODE_PORT: "{{ firewall_ingress_node_port | default('', true) }}"
+    CLUSTER_CIDRS: "{{ firewall_cluster_cidrs | join(' ') }}"
+  register: firewall_result
+  changed_when: "'firewall changed' in firewall_result.stdout"

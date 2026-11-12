@@ -1,0 +1,3 @@
+# the files every role installs live in linux/, so the repository shows exactly what runs on the nodes.
+linux_dir: '{{ playbook_dir }}/../../linux'
+ops_group: ops

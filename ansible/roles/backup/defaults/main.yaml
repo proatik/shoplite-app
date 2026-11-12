@@ -1,0 +1,4 @@
+backup_namespace: shoplite
+backup_s3_bucket: ''
+backup_aws_cli_version: 2.39.3
+backup_aws_cli_sha256: 14cb35809ad7547dd3c69fa9899a3975fbd850b6a6791f3fe264856490cd9a63

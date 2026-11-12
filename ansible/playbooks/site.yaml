@@ -1,0 +1,13 @@
+- name: Wait for every node to accept connections
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Wait until the node answers, as fresh instances take minutes to boot
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+
+- name: Harden every node
+  ansible.builtin.import_playbook: hardening.yaml
+
+- name: Install k3s
+  ansible.builtin.import_playbook: k3s.yaml

@@ -1,0 +1,8 @@
+write-kubeconfig-mode: '0600'
+secrets-encryption: true
+node-ip: {{ k3s_node_ip }}
+disable: [traefik, metrics-server]
+node-taint: ['node-role.kubernetes.io/control-plane:NoSchedule']
+{% if k3s_tls_sans %}
+tls-san: {{ k3s_tls_sans | to_json }}
+{% endif %}

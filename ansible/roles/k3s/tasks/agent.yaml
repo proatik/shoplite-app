@@ -1,0 +1,35 @@
+- name: Configure the agent to join the server
+  ansible.builtin.template:
+    src: agent.yaml.j2
+    dest: /etc/rancher/k3s/config.yaml
+    mode: '0600'
+  vars:
+    k3s_server: "{{ groups['k3s_server'][0] }}"
+  no_log: true
+  notify: Restart k3s-agent
+
+- name: Install the agent unit
+  ansible.builtin.template:
+    src: k3s.service.j2
+    dest: /etc/systemd/system/k3s-agent.service
+    mode: '0644'
+  vars:
+    k3s_mode: agent
+    k3s_unit_type: exec
+  notify: Restart k3s-agent
+
+- name: Run the agent
+  ansible.builtin.systemd_service:
+    name: k3s-agent
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Wait for the agent node to be ready
+  ansible.builtin.command: k3s kubectl wait --for=condition=Ready node/{{ ansible_facts['hostname'] }} --timeout=10s
+  delegate_to: "{{ groups['k3s_server'][0] }}"
+  register: k3s_node_ready
+  until: k3s_node_ready.rc == 0
+  retries: 36
+  delay: 5
+  changed_when: false

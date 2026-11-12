@@ -1,0 +1,2 @@
+# deploy logs in with the same key pair as the automation user unless a separate key is given.
+users_deploy_public_key: "{{ lookup('ansible.builtin.file', ansible_ssh_private_key_file ~ '.pub') }}"
