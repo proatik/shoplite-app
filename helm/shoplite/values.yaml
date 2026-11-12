@@ -12,6 +12,12 @@ database:
   name: shoplite
   storage: 2Gi
 
+# the stack in the monitoring namespace scrapes metrics and receives traces; off until it runs.
+monitoring:
+  enabled: false
+  namespace: monitoring
+  otlpEndpoint: http://tempo.monitoring.svc:4318
+
 ingress:
   className: traefik
   # an empty host matches every host name, such as the ALB's DNS name.

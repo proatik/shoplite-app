@@ -1,0 +1,19 @@
+# values for the tempo chart: the api and the worker send traces straight to its otlp http receiver.
+tempo:
+  retention: 24h
+  receivers:
+    otlp:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4318
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 1Gi }
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities: { drop: [ALL] }
+    seccompProfile: { type: RuntimeDefault }
+persistence:
+  enabled: true
+  size: 2Gi

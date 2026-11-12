@@ -86,8 +86,15 @@ jobs:
             docker run --rm -i "$HADOLINT_IMAGE" < "services/$service/Dockerfile"
           done
       # the release sets the image tag, so lint supplies a placeholder for the required value.
+      # monitoring adds its own templates, so the chart is linted with it off and on.
       - name: helm lint the chart
-        run: docker run --rm -v "$PWD/helm:/charts" "$HELM_IMAGE" lint --strict /charts/shoplite --set image.tag=lint
+        run: |
+          for monitoring in false true; do
+            docker run --rm -v "$PWD/helm:/charts" "$HELM_IMAGE" lint --strict /charts/shoplite \
+              --set image.tag=lint --set monitoring.enabled="$monitoring"
+          done
+      - name: build the dashboard manifests
+        run: kubectl kustomize monitoring/dashboards > /dev/null
 
   # each test job runs vitest once and writes a single result line into its summary.
   shared:
