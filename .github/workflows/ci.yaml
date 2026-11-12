@@ -208,13 +208,17 @@ jobs:
           path: ~/.cache/trivy
           key: trivy-db-${{ steps.day.outputs.date }}
           restore-keys: trivy-db-
+      # trivy runs as the runner user, so the cache it writes can be saved for the next run.
       - name: fail on critical vulnerabilities
         run: |
+          mkdir -p "$HOME/.cache/trivy"
           for service in $SERVICES; do
             docker run --rm \
+              --user "$(id -u):$(id -g)" \
+              --group-add "$(stat -c %g /var/run/docker.sock)" \
               -v /var/run/docker.sock:/var/run/docker.sock \
-              -v "$HOME/.cache/trivy:/root/.cache/trivy" \
-              "$TRIVY_IMAGE" image --scanners vuln --severity CRITICAL --exit-code 1 --skip-version-check --no-progress "shoplite/$service:$TAG"
+              -v "$HOME/.cache/trivy:/cache" \
+              "$TRIVY_IMAGE" image --cache-dir /cache --scanners vuln --severity CRITICAL --exit-code 1 --skip-version-check --no-progress "shoplite/$service:$TAG"
           done
       - if: steps.trivy-db.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
