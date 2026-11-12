@@ -1,0 +1,118 @@
+name: shoplite-app
+
+x-hardening: &hardening
+  init: true
+  read_only: true
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+x-postgres-url: &postgres-url postgresql://${POSTGRES_USER:-shoplite}:${POSTGRES_PASSWORD:-shoplite-local}@postgres:5432/${POSTGRES_DB:-shoplite}
+
+x-backend-environment: &backend-environment
+  POSTGRES_URL: *postgres-url
+  REDIS_URL: redis://redis:6379
+  OTEL_SDK_DISABLED: 'true'
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-shoplite}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shoplite-local}
+      POSTGRES_DB: ${POSTGRES_DB:-shoplite}
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '127.0.0.1:6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  db-init:
+    <<: *hardening
+    image: shoplite/catalog-api:local
+    command: ['scripts/db-init.js']
+    environment:
+      POSTGRES_URL: *postgres-url
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  catalog-api:
+    <<: *hardening
+    build:
+      context: .
+      dockerfile: services/catalog-api/Dockerfile
+    image: shoplite/catalog-api:local
+    environment:
+      <<: *backend-environment
+      PORT: 3000
+      CHAOS_LATENCY_MS: ${CHAOS_LATENCY_MS:-0}
+      CHAOS_ERROR_RATE: ${CHAOS_ERROR_RATE:-0}
+    ports:
+      - '127.0.0.1:3000:3000'
+    depends_on:
+      redis:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+
+  order-worker:
+    <<: *hardening
+    build:
+      context: .
+      dockerfile: services/order-worker/Dockerfile
+    image: shoplite/order-worker:local
+    environment:
+      <<: *backend-environment
+      PORT: 3030
+      CHAOS_MEMORY_LEAK: ${CHAOS_MEMORY_LEAK:-false}
+      CHAOS_SLOW_DB: ${CHAOS_SLOW_DB:-false}
+    stop_grace_period: 30s
+    depends_on:
+      redis:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+
+  web:
+    <<: *hardening
+    build:
+      context: .
+      dockerfile: services/web/Dockerfile
+    image: shoplite/web:local
+    environment:
+      API_UPSTREAM: http://catalog-api:3000
+    tmpfs:
+      - /tmp
+      - /etc/nginx/conf.d:uid=101,gid=101
+    ports:
+      - '127.0.0.1:8080:8080'
+    depends_on:
+      catalog-api:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:

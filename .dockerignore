@@ -9,6 +9,7 @@
 # editing these must not invalidate the build cache.
 **/Dockerfile
 .dockerignore
+docker-compose.yml
 
 .git
 .husky
