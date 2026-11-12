@@ -1,4 +1,5 @@
 import { Link } from '@/components/Link';
+import { CartPage } from '@/pages/CartPage';
 import { useRoute } from '@/hooks/useRoute';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
@@ -6,6 +7,7 @@ import { StateBox } from '@/components/StateBox';
 import { ProductPage } from '@/pages/ProductPage';
 import { buttonClasses } from '@/components/Button';
 import { CataloguePage } from '@/pages/CataloguePage';
+import { OrderPlacedPage } from '@/pages/OrderPlacedPage';
 import { ToastProvider } from '@/components/ToastProvider';
 
 import type { ReactNode } from 'react';
@@ -17,6 +19,12 @@ function renderRoute(route: string): ReactNode {
 
   if (route === '/') {
     return <CataloguePage />;
+  }
+  if (route === '/cart') {
+    return <CartPage />;
+  }
+  if (route === '/placed') {
+    return <OrderPlacedPage />;
   }
   if (productId) {
     return <ProductPage key={productId} id={Number(productId)} />;
