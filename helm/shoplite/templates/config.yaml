@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalog-api-config
+  labels: {{- include "shoplite.labels" "catalog-api" | nindent 4 }}
+data:
+  PORT: '3000'
+  REDIS_URL: redis://redis:6379
+  OTEL_SDK_DISABLED: 'true'
+  CHAOS_LATENCY_MS: {{ .Values.catalogApi.chaos.latencyMs | quote }}
+  CHAOS_ERROR_RATE: {{ .Values.catalogApi.chaos.errorRate | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: order-worker-config
+  labels: {{- include "shoplite.labels" "order-worker" | nindent 4 }}
+data:
+  PORT: '3030'
+  REDIS_URL: redis://redis:6379
+  OTEL_SDK_DISABLED: 'true'
+  CHAOS_MEMORY_LEAK: {{ .Values.orderWorker.chaos.memoryLeak | quote }}
+  CHAOS_SLOW_DB: {{ .Values.orderWorker.chaos.slowDb | quote }}

@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels: {{- include "shoplite.labels" "redis" | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector: { app.kubernetes.io/name: redis }
+  ports:
+    - { name: redis, port: 6379, targetPort: redis }
+---
+# append-only on an emptyDir keeps the queue across container restarts, but not when the pod is replaced.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  labels: {{- include "shoplite.labels" "redis" | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: redis }
+  template:
+    metadata:
+      labels: {{- include "shoplite.labels" "redis" | nindent 8 }}
+    spec:
+      securityContext: {{- include "shoplite.podSecurity" 999 | nindent 8 }}
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          args: [--save, '', --appendonly, 'yes']
+          ports:
+            - { name: redis, containerPort: 6379 }
+          readinessProbe:
+            exec: { command: [redis-cli, ping] }
+            periodSeconds: 5
+          livenessProbe:
+            exec: { command: [redis-cli, ping] }
+            periodSeconds: 15
+            failureThreshold: 4
+          resources: {{- toYaml .Values.redis.resources | nindent 12 }}
+          securityContext: {{- include "shoplite.containerSecurity" . | nindent 12 }}
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - { name: data, emptyDir: {} }

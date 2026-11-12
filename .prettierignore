@@ -1,2 +1,4 @@
 pnpm-lock.yaml
 packages/database/drizzle/meta/
+# go templates are not plain yaml; helm lint checks them instead.
+helm/shoplite/templates/
