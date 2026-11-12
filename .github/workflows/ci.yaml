@@ -18,6 +18,8 @@ permissions:
 env:
   COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
   HADOLINT_IMAGE: hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
+  # helm 3, the major version argo cd renders charts with.
+  HELM_IMAGE: alpine/helm:3.22.1@sha256:8191701ad1f82ee3695c87211fcbfe6d7b1bb7df92ac1c8de9ccdb0995a6a2c1
   TRIVY_IMAGE: aquasec/trivy:0.69.3@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c
   SERVICES: catalog-api order-worker web
   MAX_IMAGE_BYTES: '150000000'
@@ -81,6 +83,9 @@ jobs:
             echo "services/$service/Dockerfile"
             docker run --rm -i "$HADOLINT_IMAGE" < "services/$service/Dockerfile"
           done
+      # the release sets the image tag, so lint supplies a placeholder for the required value.
+      - name: helm lint the chart
+        run: docker run --rm -v "$PWD/helm:/charts" "$HELM_IMAGE" lint --strict /charts/shoplite --set image.tag=lint
 
   api:
     name: API tests
