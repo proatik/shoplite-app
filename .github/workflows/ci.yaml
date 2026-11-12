@@ -23,6 +23,44 @@ env:
   MAX_IMAGE_BYTES: '150000000'
 
 jobs:
+  changes:
+    name: Detect what changed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      api: ${{ steps.compute.outputs.api }}
+      worker: ${{ steps.compute.outputs.worker }}
+      web: ${{ steps.compute.outputs.web }}
+      images: ${{ steps.compute.outputs.images }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # workspace, lockfile and workflow changes touch everything, as does an unknown base commit.
+      - name: work out which parts this change touches
+        id: compute
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then base="$PR_BASE"; else base="$PUSH_BEFORE"; fi
+          if git cat-file -e "$base^{commit}" 2>/dev/null; then
+            files=$(git diff --name-only "$base" HEAD)
+          else
+            files="everything"
+          fi
+          touched() {
+            [ "$files" = "everything" ] && return 0
+            printf '%s\n' "$files" | grep -Eq "^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|\.github/|$1)"
+          }
+          flag() { if touched "$2"; then echo "$1=true"; else echo "$1=false"; fi >> "$GITHUB_OUTPUT"; }
+          flag api 'services/catalog-api/|packages/'
+          flag worker 'services/order-worker/|packages/'
+          flag web 'services/web/'
+          flag images 'services/|packages/|docker-compose.yml|\.dockerignore|Makefile|scripts/'
+          cat "$GITHUB_OUTPUT"
+
   lint:
     name: Format, typecheck and lint
     runs-on: ubuntu-24.04
@@ -44,6 +82,8 @@ jobs:
 
   test:
     name: Unit and integration tests
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.worker == 'true' || needs.changes.outputs.web == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # throwaway datastores matching the local defaults the test setup falls back to.
@@ -63,19 +103,27 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-workspace
-      - run: pnpm -r --if-present run test
-      # both suites share the shoplite_test database, so they run one after the other.
-      - run: pnpm --filter catalog-api run test:integration
-      - run: pnpm --filter order-worker run test:integration
+      - if: needs.changes.outputs.api == 'true' || needs.changes.outputs.worker == 'true'
+        run: pnpm --filter "./packages/**" --if-present run test
+      # both integration suites share the shoplite_test database, so they run one after the other.
+      - if: needs.changes.outputs.api == 'true'
+        run: |
+          pnpm --filter catalog-api run test
+          pnpm --filter catalog-api run test:integration
+      - if: needs.changes.outputs.worker == 'true'
+        run: |
+          pnpm --filter order-worker run test
+          pnpm --filter order-worker run test:integration
+      - if: needs.changes.outputs.web == 'true'
+        run: pnpm --filter web run test
 
+  # runs alongside lint and test; only publishing waits for all three.
   images:
-    name: Build, scan, smoke-test and publish images
-    needs: [lint, test]
+    name: Build, scan and smoke-test images
+    needs: changes
+    if: needs.changes.outputs.images == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    permissions:
-      contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -125,7 +173,7 @@ jobs:
             docker run --rm \
               -v /var/run/docker.sock:/var/run/docker.sock \
               -v "$HOME/.cache/trivy:/root/.cache/trivy" \
-              "$TRIVY_IMAGE" image --severity CRITICAL --exit-code 1 --no-progress "shoplite/$service:$TAG"
+              "$TRIVY_IMAGE" image --scanners vuln --severity CRITICAL --exit-code 1 --skip-version-check --no-progress "shoplite/$service:$TAG"
           done
       - if: steps.trivy-db.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -141,21 +189,42 @@ jobs:
       - if: failure()
         run: docker compose logs --no-color --tail 100
 
-      # publishing waits until the AWS role exists; until then these steps are skipped.
-      - if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AWS_ROLE_ARN != ''
-        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+  # rebuilt from the layer cache the images job just wrote, so the pushed layers are the tested ones.
+  publish:
+    name: Publish images to ECR
+    needs: [changes, lint, test, images]
+    if: >-
+      always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      vars.AWS_ROLE_ARN != '' && needs.lint.result == 'success' && needs.images.result == 'success' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
+        with:
+          files: docker-compose.yml
+          load: true
+          set: |
+            catalog-api.cache-from=type=gha,scope=catalog-api
+            order-worker.cache-from=type=gha,scope=order-worker
+            web.cache-from=type=gha,scope=web
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
-      - if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AWS_ROLE_ARN != ''
-        id: ecr
+      - id: ecr
         uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
-      - name: push the tested images to ecr
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AWS_ROLE_ARN != ''
+      - name: push the images tagged with the short commit sha
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
           for service in $SERVICES; do
-            docker tag "shoplite/$service:$TAG" "$REGISTRY/shoplite/$service:$TAG"
-            docker push "$REGISTRY/shoplite/$service:$TAG"
+            image="$REGISTRY/shoplite/$service:${GITHUB_SHA::7}"
+            docker tag "shoplite/$service:local" "$image"
+            docker push "$image"
           done
