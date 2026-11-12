@@ -1,0 +1,81 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/no-floating-promises": "error",
+    "@typescript-eslint/no-deprecated": "error",
+    "@typescript-eslint/return-await": ["error", "always"]
+  },
+  "overrides": [
+    {
+      "files": ["src/core/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/modules/**"],
+                "message": "core/ is infrastructure and must not import feature modules."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/modules/*/team/**/*.ts"],
+      "excludeFiles": ["**/*.spec.ts", "**/*.spec-helper.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/modules/*/public/**", "@/modules/*/customer/**"],
+                "message": "team code must not import another audience's code."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/modules/*/public/**/*.ts"],
+      "excludeFiles": ["**/*.spec.ts", "**/*.spec-helper.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/modules/*/team/**", "@/modules/*/customer/**"],
+                "message": "public code must not import another audience's code."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/modules/*/customer/**/*.ts"],
+      "excludeFiles": ["**/*.spec.ts", "**/*.spec-helper.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/modules/*/team/**", "@/modules/*/public/**"],
+                "message": "customer code must not import another audience's code."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "env": {
+    "node": true
+  }
+}

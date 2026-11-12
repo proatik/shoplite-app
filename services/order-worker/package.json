@@ -1,0 +1,52 @@
+{
+  "name": "order-worker",
+  "version": "1.0.0",
+  "description": "ShopLite background worker: takes orders from the orders:pending queue and completes them.",
+  "private": true,
+  "license": "UNLICENSED",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "nest build",
+    "bundle": "esbuild dist/main.js dist/tracing.js --bundle --platform=node --target=node22 --minify --keep-names --outbase=dist --outdir=bundle --log-level=warning --external:@nestjs/microservices --external:@nestjs/websockets --external:class-transformer --external:class-validator",
+    "start": "node --require ./dist/tracing.js dist/main",
+    "start:dev": "nest start --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "lint": "oxlint --type-aware src/ && depcruise src --config .dependency-cruiser.json"
+  },
+  "dependencies": {
+    "@nestjs/common": "^12.3.3",
+    "@nestjs/config": "^12.1.0",
+    "@nestjs/core": "^12.3.3",
+    "@nestjs/platform-express": "^12.3.3",
+    "@opentelemetry/api": "^1.10.0",
+    "@opentelemetry/instrumentation-http": "^0.301.0",
+    "@shoplite/database": "workspace:*",
+    "@shoplite/shared": "workspace:*",
+    "drizzle-orm": "^0.45.4",
+    "ioredis": "^6.0.0",
+    "postgres": "^3.4.9",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^12.0.11",
+    "@nestjs/testing": "^12.3.3",
+    "@swc/core": "^1.16.22",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.20.5",
+    "@types/supertest": "^7.2.1",
+    "dependency-cruiser": "^18.7.2",
+    "esbuild": "^0.28.2",
+    "oxlint": "^1.91.0",
+    "oxlint-tsgolint": "^7.0.2006",
+    "supertest": "^7.3.1",
+    "typescript": "^5.9.3",
+    "unplugin-swc": "^2.0.0",
+    "vitest": "^5.1.0"
+  }
+}
