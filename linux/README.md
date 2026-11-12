@@ -20,7 +20,7 @@ hide its tracks; `0750` with one ACL gives exactly `ops` read access and nobody 
 ## Firewall on the k3s nodes
 
 Beyond 22, 80 and 443, the nodes also open the cluster ports (6443, 10250, 8472/udp, 9100 and the
-ingress NodePort) to the private node network only, so nothing else is reachable from outside the
+ingress NodePorts 30080 for prod and 30081 for dev) to the private node network only, so nothing else is reachable from outside the
 VPC. On a single server, set only `ADMIN_CIDRS`:
 
 ```bash

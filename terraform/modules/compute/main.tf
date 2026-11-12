@@ -30,12 +30,14 @@ resource "aws_security_group" "nodes" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "ingress_from_alb" {
+  for_each = toset([for port in var.ingress_node_ports : tostring(port)])
+
   security_group_id            = aws_security_group.nodes.id
-  description                  = "ingress controller traffic from the ALB only"
+  description                  = "ingress controller port ${each.key} from the ALB only"
   referenced_security_group_id = var.alb_security_group_id
   ip_protocol                  = "tcp"
-  from_port                    = var.ingress_node_port
-  to_port                      = var.ingress_node_port
+  from_port                    = tonumber(each.key)
+  to_port                      = tonumber(each.key)
 }
 
 resource "aws_vpc_security_group_ingress_rule" "cluster" {

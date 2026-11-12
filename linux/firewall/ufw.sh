@@ -6,7 +6,7 @@
 #   ADMIN_CIDRS        networks allowed to ssh, space separated (required)
 #   NODE_CIDR          the private node network; set it on k3s nodes to open the cluster ports
 #   K3S_ROLE           server or agent; the server also opens the kubernetes api
-#   INGRESS_NODE_PORT  the ingress NodePort the load balancer reaches
+#   INGRESS_NODE_PORTS the ingress NodePorts the load balancer reaches, one per environment
 #   CLUSTER_CIDRS      pod and service networks, space separated
 set -euo pipefail
 
@@ -32,9 +32,9 @@ if [ -n "${NODE_CIDR:-}" ]; then
   ufw allow proto tcp from "$NODE_CIDR" to any port 10250 > /dev/null
   ufw allow proto udp from "$NODE_CIDR" to any port 8472 > /dev/null
   ufw allow proto tcp from "$NODE_CIDR" to any port 9100 > /dev/null
-  if [ -n "${INGRESS_NODE_PORT:-}" ]; then
-    ufw allow proto tcp from "$NODE_CIDR" to any port "$INGRESS_NODE_PORT" > /dev/null
-  fi
+  for port in ${INGRESS_NODE_PORTS:-}; do
+    ufw allow proto tcp from "$NODE_CIDR" to any port "$port" > /dev/null
+  done
   for cidr in ${CLUSTER_CIDRS:-}; do
     ufw allow from "$cidr" > /dev/null
   done

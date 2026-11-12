@@ -387,6 +387,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      registry: ${{ steps.ecr.outputs.registry }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -413,3 +415,33 @@ jobs:
             docker tag "shoplite/$service:local" "$image"
             docker push "$image"
           done
+
+  # ci never runs kubectl: it commits the new tag to shoplite-gitops, and argo cd rolls dev out.
+  release:
+    name: Release to dev through GitOps
+    needs: publish
+    if: needs.publish.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    concurrency:
+      group: gitops-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: proatik/shoplite-gitops
+          ssh-key: ${{ secrets.GITOPS_DEPLOY_KEY }}
+      - name: point dev at the new images
+        env:
+          REGISTRY: ${{ needs.publish.outputs.registry }}
+        run: |
+          tag=${GITHUB_SHA::7}
+          REGISTRY=$REGISTRY TAG=$tag yq -i '.image.registry = strenv(REGISTRY) | .image.tag = strenv(TAG)' envs/dev/values.yaml
+          if git diff --quiet; then
+            echo "dev already runs $tag"
+            exit 0
+          fi
+          git config user.name shoplite-ci
+          git config user.email ci@shoplite.invalid
+          git commit -am "chore(release): deploy $tag to dev"
+          git push

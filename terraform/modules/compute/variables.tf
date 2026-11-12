@@ -23,9 +23,9 @@ variable "alb_security_group_id" {
   type        = string
 }
 
-variable "ingress_node_port" {
-  description = "NodePort the ingress controller listens on for the ALB."
-  type        = number
+variable "ingress_node_ports" {
+  description = "NodePorts the ingress controller listens on for the ALB, one per environment."
+  type        = list(number)
 }
 
 variable "ssh_public_key" {

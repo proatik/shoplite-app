@@ -27,14 +27,15 @@ module "backup_bucket" {
 }
 
 module "alb" {
-  source              = "../../modules/alb"
-  name                = var.name
-  vpc_id              = module.network.vpc_id
-  vpc_cidr            = module.network.vpc_cidr
-  public_subnet_ids   = module.network.public_subnet_ids
-  target_instance_ids = { for name, worker in module.compute.workers : name => worker.id }
-  target_port         = var.ingress_node_port
-  health_check_path   = "/ping"
+  source                 = "../../modules/alb"
+  name                   = var.name
+  vpc_id                 = module.network.vpc_id
+  vpc_cidr               = module.network.vpc_cidr
+  public_subnet_ids      = module.network.public_subnet_ids
+  target_instance_ids    = { for name, worker in module.compute.workers : name => worker.id }
+  entry_points           = var.entry_points
+  health_check_node_port = var.entry_points["prod"].node_port
+  health_check_path      = "/ping"
 }
 
 module "compute" {
@@ -44,7 +45,7 @@ module "compute" {
   vpc_cidr                    = module.network.vpc_cidr
   private_subnet_ids          = module.network.private_subnet_ids
   alb_security_group_id       = module.alb.security_group_id
-  ingress_node_port           = var.ingress_node_port
+  ingress_node_ports          = [for entry in values(var.entry_points) : entry.node_port]
   ssh_public_key              = var.ssh_public_key
   control_plane_instance_type = var.control_plane_instance_type
   worker_instance_type        = var.worker_instance_type
@@ -143,7 +144,7 @@ resource "local_file" "inventory" {
     control_plane        = module.compute.control_plane
     workers              = module.compute.workers
     node_cidr            = module.network.vpc_cidr
-    ingress_node_port    = var.ingress_node_port
+    ingress_node_ports   = [for entry in values(var.entry_points) : entry.node_port]
     backup_bucket        = var.enable_s3_backups ? module.backup_bucket[0].bucket_name : ""
     ssh_private_key_path = var.ssh_private_key_path
   })

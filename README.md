@@ -96,6 +96,11 @@ Every pod runs as a non-root user on a read-only root filesystem with requests a
 limits set. NetworkPolicies deny all traffic by default and allow only what the app
 needs; only `catalog-api` and `order-worker` reach PostgreSQL and Redis.
 
+In the cluster, Argo CD installs it from
+[shoplite-gitops](https://github.com/proatik/shoplite-gitops): dev on the ALB's port 8080 follows
+every release automatically, and prod on port 80 changes when someone syncs it. CI never deploys; it
+commits the new image tag to that repository.
+
 The database password is a Secret created outside Git. To install by hand:
 
 ```bash
