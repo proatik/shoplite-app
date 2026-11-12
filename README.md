@@ -80,17 +80,44 @@ All flags are off by default. Set them in the shell before `make up`.
 | `CHAOS_SLOW_DB`     | `order-worker` | waits 2 seconds before each database update            |
 | `CHAOS_MEMORY_LEAK` | `order-worker` | keeps 256 KiB in memory for every processed order      |
 
+## Deploy to Kubernetes
+
+`helm/shoplite` deploys all five components into one namespace:
+
+| Component      | Kind                                | Details                                                                         |
+| -------------- | ----------------------------------- | ------------------------------------------------------------------------------- |
+| `web`          | Deployment, 2 replicas              | Ingress path `/`                                                                |
+| `catalog-api`  | Deployment, 2 replicas              | liveness `/healthz`, readiness `/readyz`, PDB `minAvailable: 1`, Ingress `/api` |
+| `order-worker` | Deployment with an HPA from 1 to 4  | scales on CPU; a 30 s grace period lets the current order finish                |
+| `postgres`     | StatefulSet with a PVC              | migrated and seeded by the `db-init` init container of `catalog-api`            |
+| `redis`        | Deployment with a ClusterIP Service | holds the `orders:pending` queue                                                |
+
+Every pod runs as a non-root user on a read-only root filesystem with requests and
+limits set. NetworkPolicies deny all traffic by default and allow only what the app
+needs; only `catalog-api` and `order-worker` reach PostgreSQL and Redis.
+
+The database password is a Secret created outside Git. To install by hand:
+
+```bash
+kubectl create namespace shoplite
+kubectl -n shoplite create secret generic shoplite-db --from-literal=password="$(openssl rand -hex 16)"
+helm install shoplite helm/shoplite -n shoplite \
+  --set image.registry=<account>.dkr.ecr.<region>.amazonaws.com --set image.tag=<short-sha>
+```
+
 ## Repository layout
 
 ```text
 shoplite-app/
 ├── services/
 │   ├── web/              React and Vite app, served as static files by Nginx
-│   ├── catalog-api/      NestJS REST API, db-init job and seed data
+│   ├── catalog-api/      NestJS REST API, db-init script and seed data
 │   └── order-worker/     NestJS queue consumer
 ├── packages/
 │   ├── database/         Drizzle schema and SQL migrations
 │   └── shared/           logger, tracing, metrics and the queue message format
+├── helm/
+│   └── shoplite/         one chart for the three services, PostgreSQL and Redis
 ├── scripts/
 │   └── smoke-test.sh     end-to-end check used by make smoke
 ├── docker-compose.yml    the full stack with health checks and hardening
@@ -99,12 +126,16 @@ shoplite-app/
 
 ## Design notes
 
-| Choice                                   | Why                                                                                                  |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Images built `FROM scratch`              | node, musl and the bundled app only: about 140 MB, no shell, run as uid 10001                        |
-| Prices stored in paisa, returned in taka | integer money in the database; the API divides by 100 so the contract shows BDT                      |
-| Cart and order list in `localStorage`    | the API has no accounts, so the browser keeps what this shopper placed                               |
-| Default database password in compose     | `make up` must work on a clean machine; set `POSTGRES_PASSWORD` to override it                       |
-| Ports bound to `127.0.0.1`               | the local stack is not reachable from other machines                                                 |
-| Tracing off in compose                   | no collector runs locally; unset `OTEL_SDK_DISABLED` and set `OTEL_EXPORTER_OTLP_ENDPOINT` to export |
-| Images built for x86-64                  | the runtime libraries are copied for one architecture, matching the lab and AWS hosts                |
+| Choice                                   | Why                                                                                                                                            |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Images built `FROM scratch`              | node, musl and the bundled app only: about 140 MB, no shell, run as uid 10001                                                                  |
+| Prices stored in paisa, returned in taka | integer money in the database; the API divides by 100 so the contract shows BDT                                                                |
+| Cart and order list in `localStorage`    | the API has no accounts, so the browser keeps what this shopper placed                                                                         |
+| Default database password in compose     | `make up` must work on a clean machine; set `POSTGRES_PASSWORD` to override it                                                                 |
+| Ports bound to `127.0.0.1`               | the local stack is not reachable from other machines                                                                                           |
+| Tracing off in compose                   | no collector runs locally; unset `OTEL_SDK_DISABLED` and set `OTEL_EXPORTER_OTLP_ENDPOINT` to export                                           |
+| Images built for x86-64                  | the runtime libraries are copied for one architecture, matching the lab and AWS hosts                                                          |
+| Traefik as the ingress controller        | the brief allows ingress-nginx or Traefik; the community ingress-nginx controller stopped receiving fixes in March 2026, and k3s ships Traefik |
+| `db-init` as an init container           | it migrates and seeds under an advisory lock before `catalog-api` serves, so no Job has to be ordered or recreated on upgrades                 |
+| Database Secret created outside Git      | the chart only references `shoplite-db`, so no password is ever committed                                                                      |
+| Redis without a volume                   | the brief asks for a plain Deployment; append-only on an `emptyDir` survives container restarts, not pod replacement                           |

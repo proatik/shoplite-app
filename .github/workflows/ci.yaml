@@ -18,6 +18,8 @@ permissions:
 env:
   COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
   HADOLINT_IMAGE: hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
+  # helm 3, the major version argo cd renders charts with.
+  HELM_IMAGE: alpine/helm:3.22.1@sha256:8191701ad1f82ee3695c87211fcbfe6d7b1bb7df92ac1c8de9ccdb0995a6a2c1
   TRIVY_IMAGE: aquasec/trivy:0.69.3@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c
   SERVICES: catalog-api order-worker web
   MAX_IMAGE_BYTES: '150000000'
@@ -28,6 +30,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
+      packages: ${{ steps.compute.outputs.packages }}
       api: ${{ steps.compute.outputs.api }}
       worker: ${{ steps.compute.outputs.worker }}
       web: ${{ steps.compute.outputs.web }}
@@ -55,6 +58,7 @@ jobs:
             printf '%s\n' "$files" | grep -Eq "^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|\.github/|$1)"
           }
           flag() { if touched "$2"; then echo "$1=true"; else echo "$1=false"; fi >> "$GITHUB_OUTPUT"; }
+          flag packages 'packages/'
           flag api 'services/catalog-api/|packages/'
           flag worker 'services/order-worker/|packages/'
           flag web 'services/web/'
@@ -81,6 +85,23 @@ jobs:
             echo "services/$service/Dockerfile"
             docker run --rm -i "$HADOLINT_IMAGE" < "services/$service/Dockerfile"
           done
+      # the release sets the image tag, so lint supplies a placeholder for the required value.
+      - name: helm lint the chart
+        run: docker run --rm -v "$PWD/helm:/charts" "$HELM_IMAGE" lint --strict /charts/shoplite --set image.tag=lint
+
+  # each test job runs vitest once and writes a single result line into its summary.
+  shared:
+    name: Shared package tests
+    needs: changes
+    if: needs.changes.outputs.packages == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-workspace
+      - run: pnpm --filter @shoplite/shared exec vitest run --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest.json"
+      - if: always()
+        run: node .github/scripts/test-summary.mjs "$RUNNER_TEMP/vitest.json"
 
   api:
     name: API tests
@@ -105,9 +126,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-workspace
-      - run: pnpm --filter "./packages/**" --if-present run test
-      - run: pnpm --filter catalog-api run test
-      - run: pnpm --filter catalog-api run test:integration
+      # one run covers both the unit and the integration project.
+      - run: pnpm --filter catalog-api exec vitest run --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest.json"
+      - if: always()
+        run: node .github/scripts/test-summary.mjs "$RUNNER_TEMP/vitest.json"
 
   worker:
     name: Worker tests
@@ -119,8 +141,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-workspace
-      - run: pnpm --filter order-worker run test
-      - run: pnpm --filter order-worker run test:integration
+      - run: pnpm --filter order-worker exec vitest run --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest.json"
+      - if: always()
+        run: node .github/scripts/test-summary.mjs "$RUNNER_TEMP/vitest.json"
 
   web:
     name: Web tests
@@ -131,7 +154,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-workspace
-      - run: pnpm --filter web run test
+      - run: pnpm --filter web exec vitest run --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest.json"
+      - if: always()
+        run: node .github/scripts/test-summary.mjs "$RUNNER_TEMP/vitest.json"
 
   # runs alongside lint and the tests; only publishing waits for them.
   images:
@@ -183,13 +208,17 @@ jobs:
           path: ~/.cache/trivy
           key: trivy-db-${{ steps.day.outputs.date }}
           restore-keys: trivy-db-
+      # trivy runs as the runner user, so the cache it writes can be saved for the next run.
       - name: fail on critical vulnerabilities
         run: |
+          mkdir -p "$HOME/.cache/trivy"
           for service in $SERVICES; do
             docker run --rm \
+              --user "$(id -u):$(id -g)" \
+              --group-add "$(stat -c %g /var/run/docker.sock)" \
               -v /var/run/docker.sock:/var/run/docker.sock \
-              -v "$HOME/.cache/trivy:/root/.cache/trivy" \
-              "$TRIVY_IMAGE" image --scanners vuln --severity CRITICAL --exit-code 1 --skip-version-check --no-progress "shoplite/$service:$TAG"
+              -v "$HOME/.cache/trivy:/cache" \
+              "$TRIVY_IMAGE" image --cache-dir /cache --scanners vuln --severity CRITICAL --exit-code 1 --skip-version-check --no-progress "shoplite/$service:$TAG"
           done
       - if: steps.trivy-db.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -208,7 +237,7 @@ jobs:
   # rebuilt from the layer cache the images job just wrote, so the pushed layers are the tested ones.
   publish:
     name: Publish images to ECR
-    needs: [changes, lint, api, worker, web, images]
+    needs: [changes, lint, shared, api, worker, web, images]
     # a test job skipped because its part did not change still counts as passed.
     if: >-
       always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&

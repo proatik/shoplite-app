@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  labels: {{- include "shoplite.labels" "web" | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: web }
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels: {{- include "shoplite.labels" "web" | nindent 4 }}
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels: { app.kubernetes.io/name: web }
+  template:
+    metadata:
+      labels: {{- include "shoplite.labels" "web" | nindent 8 }}
+    spec:
+      securityContext: {{- include "shoplite.podSecurity" 101 | nindent 8 }}
+      containers:
+        - name: web
+          image: {{ include "shoplite.image" (dict "root" $ "service" "web") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - { name: http, containerPort: 8080 }
+          # nginx resolves the upstream without dns search domains, so it needs the full service name.
+          env:
+            - name: API_UPSTREAM
+              value: http://catalog-api.{{ .Release.Namespace }}.svc.cluster.local:3000
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          resources: {{- toYaml .Values.web.resources | nindent 12 }}
+          securityContext: {{- include "shoplite.containerSecurity" . | nindent 12 }}
+          # nginx renders its config into conf.d at start and keeps pid and temp files in /tmp.
+          volumeMounts:
+            - { name: conf, mountPath: /etc/nginx/conf.d }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: conf, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }

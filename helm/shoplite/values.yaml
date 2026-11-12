@@ -1,0 +1,62 @@
+# images are <registry>/shoplite/<service>:<tag>; an empty registry uses local images.
+image:
+  registry: ''
+  tag: ''
+  pullPolicy: IfNotPresent
+
+# the Secret is created outside Git and holds the database password under the key "password".
+# the password goes into a connection URL, so it must be URL-safe (for example hex).
+database:
+  existingSecret: shoplite-db
+  user: shoplite
+  name: shoplite
+  storage: 2Gi
+
+ingress:
+  className: traefik
+  # an empty host matches every host name, such as the ALB's DNS name.
+  host: ''
+  # pods in this namespace (the ingress controller) may reach web and catalog-api.
+  controllerNamespace: traefik
+
+web:
+  replicas: 2
+  resources:
+    requests: { cpu: 25m, memory: 32Mi }
+    limits: { cpu: 200m, memory: 64Mi }
+
+catalogApi:
+  replicas: 2
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+  # fault injection for the chaos exercise; off by default.
+  chaos:
+    latencyMs: 0
+    errorRate: 0
+
+orderWorker:
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 4
+    cpuUtilization: 70
+  # an order takes up to about 6 s with CHAOS_SLOW_DB, so 30 s lets the current one finish.
+  terminationGracePeriodSeconds: 30
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  chaos:
+    memoryLeak: false
+    slowDb: false
+
+postgres:
+  image: postgres:16.4-alpine@sha256:5660c2cbfea50c7a9127d17dc4e48543eedd3d7a41a595a2dfa572471e37e64c
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+
+redis:
+  image: redis:7.4-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 200m, memory: 128Mi }

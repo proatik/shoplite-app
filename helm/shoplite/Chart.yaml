@@ -1,0 +1,5 @@
+apiVersion: v2
+name: shoplite
+description: ShopLite web, catalog-api, order-worker, PostgreSQL and Redis in one release.
+type: application
+version: 0.1.0

@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-worker
+  labels: {{- include "shoplite.labels" "order-worker" | nindent 4 }}
+spec:
+  selector:
+    matchLabels: { app.kubernetes.io/name: order-worker }
+  template:
+    metadata:
+      labels: {{- include "shoplite.labels" "order-worker" | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.orderWorker.terminationGracePeriodSeconds }}
+      securityContext: {{- include "shoplite.podSecurity" 10001 | nindent 8 }}
+      containers:
+        - name: order-worker
+          image: {{ include "shoplite.image" (dict "root" $ "service" "order-worker") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - { name: http, containerPort: 3030 }
+          envFrom:
+            - configMapRef: { name: order-worker-config }
+          env: {{- include "shoplite.postgresEnv" . | nindent 12 }}
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 3
+            failureThreshold: 20
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources: {{- toYaml .Values.orderWorker.resources | nindent 12 }}
+          securityContext: {{- include "shoplite.containerSecurity" . | nindent 12 }}
+---
+# the HPA owns the replica count, so the Deployment leaves replicas unset.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: order-worker
+  labels: {{- include "shoplite.labels" "order-worker" | nindent 4 }}
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: order-worker }
+  minReplicas: {{ .Values.orderWorker.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.orderWorker.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: {{ .Values.orderWorker.autoscaling.cpuUtilization }} }
