@@ -5,6 +5,7 @@ import { HealthModule } from '@/core/health/health.module';
 import { MetricsModule } from '@/core/metrics/metrics.module';
 import { AppConfigModule } from '@/core/config/config.module';
 import { DatabaseModule } from '@/core/database/database.module';
+import { ProcessOrderModule } from '@/jobs/process-order/process-order.module';
 
 @Module({
   imports: [
@@ -12,7 +13,8 @@ import { DatabaseModule } from '@/core/database/database.module';
     HealthModule,
     MetricsModule,
     DatabaseModule,
-    AppConfigModule
+    AppConfigModule,
+    ProcessOrderModule
   ]
 })
 export class WorkerModule {}
