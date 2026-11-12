@@ -3,6 +3,9 @@
 # data is never overwritten. Run it as shoplite-backup, whose kubeconfig may only exec into postgres-0.
 set -euo pipefail
 
+# kubectl is k3s here; this stops it reading the root-only k3s config as the backup user.
+export K3S_CONFIG_FILE=/dev/null
+
 if [ $# -lt 1 ]; then
   echo 'usage: shoplite-restore <dump file or s3:// url> [target database]' >&2
   exit 2
