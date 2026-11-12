@@ -4,6 +4,13 @@ dist/
 bundle/
 *.tsbuildinfo
 
+# Terraform working files, local state and the inventory apply writes
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform/envs/aws/backend_override.tf
+ansible/inventories/aws/hosts.yaml
+
 # Environment
 .env
 .env.*

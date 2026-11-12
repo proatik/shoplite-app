@@ -35,6 +35,7 @@ jobs:
       worker: ${{ steps.compute.outputs.worker }}
       web: ${{ steps.compute.outputs.web }}
       images: ${{ steps.compute.outputs.images }}
+      terraform: ${{ steps.compute.outputs.terraform }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -63,6 +64,7 @@ jobs:
           flag worker 'services/order-worker/|packages/'
           flag web 'services/web/'
           flag images 'services/|packages/|docker-compose.yml|\.dockerignore|Makefile|scripts/'
+          flag terraform 'terraform/'
           cat "$GITHUB_OUTPUT"
 
   lint:
@@ -164,6 +166,111 @@ jobs:
       - run: pnpm --filter web exec vitest run --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest.json"
       - if: always()
         run: node .github/scripts/test-summary.mjs "$RUNNER_TEMP/vitest.json"
+
+  # every check reports even when an earlier one fails, so the pull-request comment shows them all.
+  terraform:
+    name: Terraform checks and plan
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+      - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
+        with:
+          tflint_version: v0.65.0
+      - id: fmt
+        run: terraform fmt -check -recursive
+      - id: validate
+        if: ${{ !cancelled() }}
+        run: |
+          for root in envs/aws state; do
+            terraform -chdir="$root" init -backend=false -input=false > /dev/null
+            terraform -chdir="$root" validate -no-color
+          done
+      - id: tflint
+        if: ${{ !cancelled() }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          tflint --init --config "$PWD/.tflint.hcl"
+          tflint --recursive --config "$PWD/.tflint.hcl" --format compact
+      # accepted findings are ignored inline, each above its resource with the reason.
+      - id: trivy
+        if: ${{ !cancelled() }}
+        run: docker run --rm -v "$PWD:/tf:ro" "$TRIVY_IMAGE" config --severity HIGH,CRITICAL --exit-code 1 --skip-version-check --quiet /tf
+
+      # a lab session sets these variables from the github_variables output; until then the plan is skipped.
+      - if: github.event_name == 'pull_request' && vars.AWS_PLAN_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - id: plan
+        if: github.event_name == 'pull_request' && vars.AWS_PLAN_ROLE_ARN != ''
+        env:
+          TF_IN_AUTOMATION: 'true'
+          TF_VAR_region: ${{ vars.AWS_REGION }}
+          TF_VAR_ssh_public_key: ${{ vars.TF_SSH_PUBLIC_KEY }}
+          TF_VAR_ssh_private_key_path: ${{ vars.TF_SSH_PRIVATE_KEY_PATH }}
+          TF_VAR_budget_email: ${{ vars.TF_BUDGET_EMAIL }}
+          TF_VAR_admin_access: ${{ vars.TF_ADMIN_ACCESS }}
+          TF_VAR_admin_cidr: ${{ vars.TF_ADMIN_CIDR }}
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          REGION: ${{ vars.AWS_REGION }}
+        # the role may only read, so the plan runs without taking the state lock.
+        run: |
+          terraform -chdir=envs/aws init -reconfigure -input=false             -backend-config="bucket=$STATE_BUCKET" -backend-config="region=$REGION" > /dev/null
+          terraform -chdir=envs/aws plan -lock=false -input=false -no-color > "$RUNNER_TEMP/plan.txt"
+
+      - name: post the results on the pull request
+        if: github.event_name == 'pull_request' && !cancelled()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          RESULTS: >-
+            fmt=${{ steps.fmt.outcome }} validate=${{ steps.validate.outcome }}
+            tflint=${{ steps.tflint.outcome }} trivy=${{ steps.trivy.outcome }}
+            plan=${{ steps.plan.outcome }}
+        run: |
+          body="$RUNNER_TEMP/comment.md"
+          {
+            echo '### Terraform'
+            echo
+            echo '| Check | Result |'
+            echo '| --- | --- |'
+            for result in $RESULTS; do
+              case "${result#*=}" in
+                success) icon='✅ passed' ;;
+                skipped) icon='⏭️ skipped' ;;
+                *) icon='❌ failed' ;;
+              esac
+              echo "| ${result%%=*} | $icon |"
+            done
+            echo
+            if [ -s "$RUNNER_TEMP/plan.txt" ]; then
+              echo '<details><summary>Plan</summary>'
+              echo
+              echo '```text'
+              head -c 60000 "$RUNNER_TEMP/plan.txt"
+              echo '```'
+              echo '</details>'
+            else
+              echo 'The plan runs once a lab session sets the AWS repository variables, as terraform/README.md describes.'
+            fi
+          } > "$body"
+          gh pr comment "$PR" --edit-last --body-file "$body" || gh pr comment "$PR" --body-file "$body"
 
   # runs alongside lint and the tests; only publishing waits for them.
   images:

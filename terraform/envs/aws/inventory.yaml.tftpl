@@ -1,0 +1,24 @@
+all:
+  vars:
+    ansible_user: ubuntu
+    ansible_ssh_private_key_file: ${ssh_private_key_path}
+    ansible_ssh_common_args: >-
+      -o StrictHostKeyChecking=accept-new
+      -o ProxyCommand="${ssh_proxy}"
+    admin_cidrs: ${jsonencode(admin_cidrs)}
+    node_cidr: ${node_cidr}
+    firewall_ingress_node_port: ${ingress_node_port}
+    backup_s3_bucket: "${backup_bucket}"
+  children:
+    k3s_server:
+      hosts:
+        control-plane:
+          ansible_host: ${ssh_host["control-plane"]}
+          k3s_node_ip: ${control_plane.private_ip}
+    k3s_agents:
+      hosts:
+%{ for name, worker in workers ~}
+        ${name}:
+          ansible_host: ${ssh_host[name]}
+          k3s_node_ip: ${worker.private_ip}
+%{ endfor ~}
