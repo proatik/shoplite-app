@@ -105,6 +105,25 @@ helm install shoplite helm/shoplite -n shoplite \
   --set image.registry=<account>.dkr.ecr.<region>.amazonaws.com --set image.tag=<short-sha>
 ```
 
+## Observability
+
+The stack runs in the `monitoring` namespace; the chart connects to it when
+`monitoring.enabled` is `true`.
+
+| Signal     | Tool                                 | How ShopLite feeds it                                                     |
+| ---------- | ------------------------------------ | ------------------------------------------------------------------------- |
+| Metrics    | Prometheus (kube-prometheus-stack)   | ServiceMonitors scrape `/metrics` on `catalog-api` and `order-worker`     |
+| Logs       | Loki, collected by Grafana Alloy     | Alloy reads every pod's JSON logs and keeps `level` and `trace_id`        |
+| Traces     | Tempo, through the OpenTelemetry SDK | both services export OTLP; the queue message carries the trace context    |
+| Dashboards | Grafana                              | `monitoring/dashboards/golden-signals.json`, provisioned from Git         |
+| Alerts     | Alertmanager                         | `monitoring/alert-rules/shoplite.yaml`, each alert linking to its runbook |
+
+The signals link to each other, so one order can be followed from an alert to the exact request:
+
+1. A latency panel shows exemplar dots; each one opens the trace of that request in Tempo.
+2. A trace runs API → `orders:pending` → worker → database, and opens the log lines that carry its id.
+3. A log line's `trace_id` opens the trace it belongs to.
+
 ## Repository layout
 
 ```text
@@ -118,6 +137,11 @@ shoplite-app/
 │   └── shared/           logger, tracing, metrics and the queue message format
 ├── helm/
 │   └── shoplite/         one chart for the three services, PostgreSQL and Redis
+├── monitoring/
+│   ├── dashboards/       the Golden Signals dashboard, loaded by Grafana's sidecar
+│   ├── alert-rules/      the five alerts as a PrometheusRule
+│   ├── runbooks/         one runbook per alert
+│   └── values/           Helm values for kube-prometheus-stack, Loki, Tempo and Alloy
 ├── scripts/
 │   └── smoke-test.sh     end-to-end check used by make smoke
 ├── docker-compose.yml    the full stack with health checks and hardening
@@ -126,16 +150,18 @@ shoplite-app/
 
 ## Design notes
 
-| Choice                                   | Why                                                                                                                                            |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Images built `FROM scratch`              | node, musl and the bundled app only: about 140 MB, no shell, run as uid 10001                                                                  |
-| Prices stored in paisa, returned in taka | integer money in the database; the API divides by 100 so the contract shows BDT                                                                |
-| Cart and order list in `localStorage`    | the API has no accounts, so the browser keeps what this shopper placed                                                                         |
-| Default database password in compose     | `make up` must work on a clean machine; set `POSTGRES_PASSWORD` to override it                                                                 |
-| Ports bound to `127.0.0.1`               | the local stack is not reachable from other machines                                                                                           |
-| Tracing off in compose                   | no collector runs locally; unset `OTEL_SDK_DISABLED` and set `OTEL_EXPORTER_OTLP_ENDPOINT` to export                                           |
-| Images built for x86-64                  | the runtime libraries are copied for one architecture, matching the lab and AWS hosts                                                          |
-| Traefik as the ingress controller        | the brief allows ingress-nginx or Traefik; the community ingress-nginx controller stopped receiving fixes in March 2026, and k3s ships Traefik |
-| `db-init` as an init container           | it migrates and seeds under an advisory lock before `catalog-api` serves, so no Job has to be ordered or recreated on upgrades                 |
-| Database Secret created outside Git      | the chart only references `shoplite-db`, so no password is ever committed                                                                      |
-| Redis without a volume                   | the brief asks for a plain Deployment; append-only on an `emptyDir` survives container restarts, not pod replacement                           |
+| Choice                                         | Why                                                                                                                                            |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Images built `FROM scratch`                    | node, musl and the bundled app only: about 140 MB, no shell, run as uid 10001                                                                  |
+| Prices stored in paisa, returned in taka       | integer money in the database; the API divides by 100 so the contract shows BDT                                                                |
+| Cart and order list in `localStorage`          | the API has no accounts, so the browser keeps what this shopper placed                                                                         |
+| Default database password in compose           | `make up` must work on a clean machine; set `POSTGRES_PASSWORD` to override it                                                                 |
+| Ports bound to `127.0.0.1`                     | the local stack is not reachable from other machines                                                                                           |
+| Tracing off in compose                         | no collector runs locally; unset `OTEL_SDK_DISABLED` and set `OTEL_EXPORTER_OTLP_ENDPOINT` to export                                           |
+| Images built for x86-64                        | the runtime libraries are copied for one architecture, matching the lab and AWS hosts                                                          |
+| Traefik as the ingress controller              | the brief allows ingress-nginx or Traefik; the community ingress-nginx controller stopped receiving fixes in March 2026, and k3s ships Traefik |
+| `db-init` as an init container                 | it migrates and seeds under an advisory lock before `catalog-api` serves, so no Job has to be ordered or recreated on upgrades                 |
+| Database Secret created outside Git            | the chart only references `shoplite-db`, so no password is ever committed                                                                      |
+| Traces sent straight to Tempo                  | Tempo receives OTLP itself, so a separate collector would only add a hop to run and monitor                                                    |
+| `trace_id` kept as structured metadata in Loki | it stays searchable and linkable without creating a log stream per trace                                                                       |
+| Redis without a volume                         | the brief asks for a plain Deployment; append-only on an `emptyDir` survives container restarts, not pod replacement                           |
