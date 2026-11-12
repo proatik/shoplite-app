@@ -1,0 +1,94 @@
+# values for the kube-prometheus-stack chart in the monitoring namespace.
+
+# k3s runs etcd, the scheduler, the controller manager and the proxy inside one process,
+# so these scrape targets do not exist.
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    # exemplars link a latency sample to the trace that produced it.
+    enableFeatures: [exemplar-storage]
+    retention: 24h
+    # pick up ServiceMonitors and rules from every namespace, not only this release.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests: { cpu: 100m, memory: 512Mi }
+      limits: { memory: 1Gi }
+
+alertmanager:
+  alertmanagerSpec:
+    # the slack webhook url lives in a Secret created outside Git.
+    secrets: [alertmanager-slack]
+    resources:
+      requests: { cpu: 10m, memory: 64Mi }
+  config:
+    route:
+      group_by: [namespace, alertname]
+      receiver: slack
+      routes:
+        - receiver: 'null'
+          matchers: ['alertname = "Watchdog"']
+    receivers:
+      - name: 'null'
+      - name: slack
+        slack_configs:
+          - api_url_file: /etc/alertmanager/secrets/alertmanager-slack/webhook-url
+            send_resolved: true
+            title: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+            text: |-
+              {{ range .Alerts }}*{{ .Labels.severity }}* {{ .Annotations.summary }}
+              {{ with .Annotations.runbook_url }}<{{ . }}|Runbook>{{ end }}
+              {{ end }}
+
+grafana:
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: ALL
+    datasources:
+      # an exemplar on a latency panel opens its trace in tempo.
+      exemplarTraceIdDestinations:
+        datasourceUid: tempo
+        traceIdLabelName: trace_id
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      url: http://loki.monitoring.svc:3100
+      jsonData:
+        # a log line's trace_id opens the trace in tempo.
+        derivedFields:
+          - name: TraceID
+            matcherType: label
+            matcherRegex: trace_id
+            datasourceUid: tempo
+            url: '$${__value.raw}'
+    - name: Tempo
+      type: tempo
+      uid: tempo
+      url: http://tempo.monitoring.svc:3200
+      jsonData:
+        # a span opens the log lines that carry its trace id.
+        tracesToLogsV2:
+          datasourceUid: loki
+          customQuery: true
+          query: '{namespace=~"shoplite.*"} | trace_id="$${__trace.traceId}"'
+          spanStartTimeShift: '-5m'
+          spanEndTimeShift: '5m'
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 768Mi }
