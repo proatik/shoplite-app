@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Dumps the ShopLite database from the postgres-0 pod into /var/backups/shoplite, keeps a week of dumps
+# and copies each new dump to S3 when BACKUP_S3_BUCKET is set (from /etc/shoplite/backup.env).
+set -euo pipefail
+
+backup_dir=/var/backups/shoplite
+retention_days=${BACKUP_RETENTION_DAYS:-7}
+file="$backup_dir/shoplite-$(date -u +%Y%m%dT%H%M%SZ).dump"
+
+kubectl -n shoplite exec postgres-0 -- pg_dump -U shoplite -d shoplite --format=custom > "$file.partial"
+if [ ! -s "$file.partial" ]; then
+  rm -f "$file.partial"
+  echo "$(date -Is) backup failed: the dump is empty" >&2
+  exit 1
+fi
+mv "$file.partial" "$file"
+
+find "$backup_dir" -name 'shoplite-*.dump' -mtime +"$retention_days" -delete
+if [ -n "${BACKUP_S3_BUCKET:-}" ]; then
+  aws s3 cp "$file" "s3://$BACKUP_S3_BUCKET/postgres/" --only-show-errors
+fi
+echo "$(date -Is) backup written: $file ($(stat -c %s "$file") bytes)"

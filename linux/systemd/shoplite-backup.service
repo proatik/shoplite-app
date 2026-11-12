@@ -1,0 +1,33 @@
+[Unit]
+Description=Back up the ShopLite database with pg_dump
+Wants=network-online.target
+After=network-online.target k3s.service
+# a failing dump is retried, but at most three times an hour.
+StartLimitIntervalSec=1h
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=shoplite-backup
+Group=shoplite-backup
+EnvironmentFile=-/etc/shoplite/backup.env
+Environment=KUBECONFIG=/var/lib/shoplite-backup/kubeconfig
+Environment=HOME=/var/lib/shoplite-backup
+ExecStart=/usr/local/sbin/shoplite-backup
+Restart=on-failure
+RestartSec=5min
+# the log is readable by the ops group through the directory's default acl.
+StandardOutput=append:/var/log/shoplite/backup.log
+StandardError=append:/var/log/shoplite/backup.log
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/backups/shoplite /var/lib/shoplite-backup
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
