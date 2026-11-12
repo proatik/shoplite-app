@@ -1,0 +1,11 @@
+# wraps each dashboard in a ConfigMap with the label grafana's sidecar watches.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: '1'
+configMapGenerator:
+  - name: shoplite-dashboards
+    files:
+      - golden-signals.json
