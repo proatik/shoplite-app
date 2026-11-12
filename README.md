@@ -8,7 +8,7 @@ repository.
 ## How it works
 
 ```mermaid
-flowchart LR
+flowchart TB
     B["Browser"] --> WEB["web · Nginx"]
     WEB -->|"/api"| API["catalog-api · NestJS"]
     API <--> PG[("PostgreSQL")]
