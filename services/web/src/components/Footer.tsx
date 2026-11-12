@@ -2,7 +2,6 @@ import { Link } from '@/components/Link';
 
 const FOOTER_LINKS = [
   { href: '/', label: 'Catalogue' },
-  { href: '/cart', label: 'Cart' },
   { href: '/orders', label: 'My orders' }
 ];
 

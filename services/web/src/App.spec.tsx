@@ -401,160 +401,6 @@ describe('order page', () => {
   });
 });
 
-const cartLine = (productId: number, quantity: number) => ({
-  productId,
-  quantity
-});
-
-function seedCart(...lines: ReturnType<typeof cartLine>[]) {
-  window.localStorage.setItem('shoplite.cart', JSON.stringify(lines));
-}
-
-const twoProducts = [
-  products[0]!,
-  {
-    id: 3,
-    name: 'Clay Pot',
-    description: '',
-    image_url: null,
-    price: 100,
-    stock: 5
-  }
-];
-
-describe('cart', () => {
-  it('shows lines with the total', async () => {
-    window.history.pushState(null, '', '/cart');
-    seedCart(cartLine(1, 2), cartLine(3, 1));
-    fetchMock.mockImplementation(() => jsonResponse(twoProducts));
-    renderApp();
-
-    expect(await screen.findByText('Jute Tote Bag')).toBeTruthy();
-    expect(screen.getByText('BDT 900.00')).toBeTruthy();
-    expect(screen.getAllByText('BDT 1,000.00').length).toBeGreaterThan(0);
-    expect(screen.getByText('(3 items)')).toBeTruthy();
-    expect(screen.getByText('Place order')).toBeTruthy();
-  });
-
-  it('changes quantity and removes a line', async () => {
-    window.history.pushState(null, '', '/cart');
-    seedCart(cartLine(1, 2), cartLine(3, 1));
-    fetchMock.mockImplementation(() => jsonResponse(twoProducts));
-    const user = userEvent.setup();
-    renderApp();
-
-    await user.click(
-      await screen.findByLabelText('Increase quantity of jute tote bag')
-    );
-
-    expect(await screen.findByText('(4 items)')).toBeTruthy();
-
-    await user.click(screen.getByLabelText('Remove Clay Pot'));
-
-    expect(screen.queryByText('Clay Pot')).toBeNull();
-    expect(JSON.parse(window.localStorage.getItem('shoplite.cart')!)).toEqual([
-      { productId: 1, quantity: 3 }
-    ]);
-  });
-
-  it('flags a line that is not available and blocks placing', async () => {
-    window.history.pushState(null, '', '/cart');
-    seedCart(cartLine(2, 1));
-    fetchMock.mockImplementation(() => jsonResponse(products));
-    renderApp();
-
-    expect(
-      await screen.findByText('Not enough stock for this quantity.')
-    ).toBeTruthy();
-    expect(screen.getByRole('alert').textContent).toContain(
-      'One item needs your attention'
-    );
-    expect(
-      (screen.getByText('Place order') as HTMLButtonElement).disabled
-    ).toBe(true);
-  });
-
-  it('shows the empty state without calling the API', () => {
-    window.history.pushState(null, '', '/cart');
-    renderApp();
-
-    expect(screen.getByText('Your cart is empty')).toBeTruthy();
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-});
-
-describe('placing an order from the cart', () => {
-  it('sends one order per line and lists both on the placed page', async () => {
-    window.history.pushState(null, '', '/cart');
-    seedCart(cartLine(1, 2), cartLine(3, 1));
-    let nextId = 41;
-    fetchMock.mockImplementation((input, init) => {
-      if (init?.method === 'POST') {
-        nextId += 1;
-        return jsonResponse({ id: nextId, status: 'PENDING' }, 201);
-      }
-      if (isUrl(input, '/api/orders/42')) {
-        return jsonResponse(order('PENDING'));
-      }
-      if (isUrl(input, '/api/orders/43')) {
-        return jsonResponse({
-          ...order('PENDING'),
-          id: 43,
-          product_id: 3,
-          quantity: 1
-        });
-      }
-      return jsonResponse(twoProducts);
-    });
-    const user = userEvent.setup();
-    renderApp();
-
-    await user.click(await screen.findByText('Place order'));
-
-    expect(await screen.findByText('Order Placed')).toBeTruthy();
-    const posts = fetchMock.mock.calls.filter(
-      ([, init]) => init?.method === 'POST'
-    );
-    expect(posts.map(([, init]) => init?.body)).toEqual([
-      JSON.stringify({ product_id: 1, quantity: 2 }),
-      JSON.stringify({ product_id: 3, quantity: 1 })
-    ]);
-    expect(currentUrl()).toBe('/placed?ids=42,43');
-    expect(await screen.findByText('#42, #43')).toBeTruthy();
-    expect(await screen.findByText('Clay Pot')).toBeTruthy();
-    expect(screen.getByText('Jute Tote Bag')).toBeTruthy();
-    expect(window.localStorage.getItem('shoplite.cart')).toBe('[]');
-    expect(storedOrderIds()).toEqual([43, 42]);
-  });
-
-  it('keeps a failed line in the cart and toasts the API message', async () => {
-    window.history.pushState(null, '', '/cart');
-    seedCart(cartLine(1, 2), cartLine(3, 1));
-    fetchMock.mockImplementation((_input, init) => {
-      if (init?.method !== 'POST') {
-        return jsonResponse(twoProducts);
-      }
-      return typeof init.body === 'string' &&
-        init.body.includes('"product_id":1')
-        ? jsonResponse({ id: 42, status: 'PENDING' }, 201)
-        : failure(409, 'Not enough stock for this product.');
-    });
-    const user = userEvent.setup();
-    renderApp();
-
-    await user.click(await screen.findByText('Place order'));
-
-    expect((await screen.findByRole('alert')).textContent).toContain(
-      'Clay Pot: Not enough stock for this product.'
-    );
-    expect(currentUrl()).toBe('/cart');
-    expect(JSON.parse(window.localStorage.getItem('shoplite.cart')!)).toEqual([
-      { productId: 3, quantity: 1 }
-    ]);
-    expect(storedOrderIds()).toEqual([42]);
-  });
-});
-
 describe('my orders', () => {
   it('lists stored ids with fetched statuses', async () => {
     window.history.pushState(null, '', '/orders');
@@ -620,27 +466,15 @@ describe('browser storage', () => {
     expect(currentUrl()).toBe('/orders/42');
   });
 
-  it('resets a corrupt or invalid stored cart', () => {
-    window.history.pushState(null, '', '/cart');
-    window.localStorage.setItem('shoplite.cart', '{not json');
+  it('resets a corrupt or invalid stored order list', () => {
+    window.history.pushState(null, '', '/orders');
+    window.localStorage.setItem('shoplite.orders', '{not json');
     renderApp();
 
-    expect(screen.getByText('Your cart is empty')).toBeTruthy();
-    expect(window.localStorage.getItem('shoplite.cart')).toBeNull();
+    expect(screen.getByText('No orders yet')).toBeTruthy();
+    expect(window.localStorage.getItem('shoplite.orders')).toBeNull();
     cleanup();
 
-    window.localStorage.setItem(
-      'shoplite.cart',
-      JSON.stringify([{ productId: 1, quantity: 'many' }])
-    );
-    renderApp();
-
-    expect(screen.getByText('Your cart is empty')).toBeTruthy();
-    expect(window.localStorage.getItem('shoplite.cart')).toBeNull();
-  });
-
-  it('resets a corrupt stored order list', () => {
-    window.history.pushState(null, '', '/orders');
     window.localStorage.setItem('shoplite.orders', '[{"id":"x"}]');
     renderApp();
 
@@ -663,6 +497,6 @@ describe('footer', () => {
     expect(footer.textContent).not.toContain('BDT');
     expect(
       Array.from(footer.querySelectorAll('a')).map((link) => link.textContent)
-    ).toEqual(['Catalogue', 'Cart', 'My orders']);
+    ).toEqual(['Catalogue', 'My orders']);
   });
 });

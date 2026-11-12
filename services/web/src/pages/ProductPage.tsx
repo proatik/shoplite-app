@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { cn } from '@/lib/cn';
 import { Link } from '@/components/Link';
-import { MAX_QUANTITY } from '@/lib/cart';
 import { Price } from '@/components/Price';
 import { navigate } from '@/lib/navigation';
 import { useToast } from '@/hooks/useToast';
@@ -21,6 +20,9 @@ import { Button, buttonClasses } from '@/components/Button';
 import { QuantityStepper } from '@/components/QuantityStepper';
 
 import type { Product } from '@/lib/types';
+
+// matches MAX_ORDER_QUANTITY in the catalog API's order schema.
+const MAX_QUANTITY = 100;
 
 const LONG_DESCRIPTION_LENGTH = 240;
 
