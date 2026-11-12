@@ -1,0 +1,69 @@
+# the five shoplite alerts; each names its severity and the runbook that handles it.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: shoplite
+  labels:
+    app.kubernetes.io/part-of: shoplite
+spec:
+  groups:
+    - name: shoplite
+      rules:
+        - alert: HighErrorRate
+          expr: |
+            sum by (namespace) (rate(http_requests_total{status=~"5.."}[5m]))
+              / sum by (namespace) (rate(http_requests_total[5m]))
+              > 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: More than 5% of catalog-api requests in {{ $labels.namespace }} fail with a 5xx.
+            description: The 5xx ratio is {{ $value | humanizePercentage }}.
+            runbook_url: https://github.com/proatik/shoplite-app/blob/main/monitoring/runbooks/high-error-rate.md
+
+        - alert: HighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum by (namespace, le) (rate(http_request_duration_seconds_bucket[5m]))
+            ) > 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: The catalog-api p95 latency in {{ $labels.namespace }} is above 1 second.
+            description: The p95 latency is {{ $value | humanizeDuration }}.
+            runbook_url: https://github.com/proatik/shoplite-app/blob/main/monitoring/runbooks/high-latency.md
+
+        - alert: QueueBacklog
+          expr: max by (namespace) (order_queue_depth) > 50
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: More than 50 orders wait in the orders:pending queue in {{ $labels.namespace }}.
+            description: '{{ $value }} orders are waiting; the worker is not keeping up.'
+            runbook_url: https://github.com/proatik/shoplite-app/blob/main/monitoring/runbooks/queue-backlog.md
+
+        # any restart within ten minutes counts, so a slow crash loop is caught as well.
+        - alert: PodCrashLooping
+          expr: increase(kube_pod_container_status_restarts_total{namespace=~"shoplite.*"}[10m]) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }} keeps restarting.
+            description: It restarted {{ $value | humanize }} times in the last 10 minutes.
+            runbook_url: https://github.com/proatik/shoplite-app/blob/main/monitoring/runbooks/pod-crash-looping.md
+
+        - alert: NodeDiskFilling
+          expr: |
+            1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs"}
+              / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs"}
+              > 0.85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: '{{ $labels.mountpoint }} on {{ $labels.instance }} is more than 85% full.'
+            description: The disk is {{ $value | humanizePercentage }} used.
+            runbook_url: https://github.com/proatik/shoplite-app/blob/main/monitoring/runbooks/node-disk-filling.md
