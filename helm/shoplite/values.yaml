@@ -12,6 +12,10 @@ database:
   name: shoplite
   storage: 2Gi
 
+# an account for the nightly pg_dump on the control plane; on where that backup runs.
+backup:
+  enabled: false
+
 # the stack in the monitoring namespace scrapes metrics and receives traces; off until it runs.
 monitoring:
   enabled: false
