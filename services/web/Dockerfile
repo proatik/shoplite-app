@@ -22,7 +22,12 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 RUN pnpm --filter web run build
 
 
-FROM nginxinc/nginx-unprivileged:1.29.3-alpine@sha256:5aea7cc516b419e3526f47dd1531be31a56a046cfe44754d94f9383e13e2ee99 AS runtime
+FROM nginxinc/nginx-unprivileged:1.30.6-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03 AS runtime
+
+# the base image lags behind alpine's security fixes, so the build applies them, then drops root again.
+USER 0
+RUN apk upgrade --no-cache
+USER 101
 
 # upstream for /api/, resolved at request time.
 ENV API_UPSTREAM=http://catalog-api:3000
