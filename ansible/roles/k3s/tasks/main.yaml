@@ -24,6 +24,37 @@
     state: directory
     mode: '0700'
 
+# k3s picks up a credential provider from these default paths, so no extra k3s setting is needed.
+- name: Create the kubelet credential provider directory
+  ansible.builtin.file:
+    path: /var/lib/rancher/credentialprovider/bin
+    state: directory
+    mode: '0755'
+
+- name: Download the pinned ecr credential provider and verify its checksum
+  ansible.builtin.get_url:
+    url: '{{ k3s_ecr_provider_url }}'
+    checksum: 'sha256:{{ k3s_ecr_provider_url }}.sha256'
+    dest: /var/lib/rancher/credentialprovider/bin/ecr-credential-provider
+    mode: '0755'
+  vars:
+    k3s_ecr_provider_url: 'https://artifacts.k8s.io/binaries/cloud-provider-aws/{{ k3s_ecr_provider_version }}/linux/amd64/ecr-credential-provider-linux-amd64'
+  notify: Restart k3s for the credential provider
+
+- name: Let the kubelet pull from private ecr with the node's iam role
+  ansible.builtin.copy:
+    dest: /var/lib/rancher/credentialprovider/config.yaml
+    mode: '0644'
+    content: |
+      apiVersion: kubelet.config.k8s.io/v1
+      kind: CredentialProviderConfig
+      providers:
+        - name: ecr-credential-provider
+          matchImages: ['*.dkr.ecr.*.amazonaws.com']
+          defaultCacheDuration: 12h
+          apiVersion: credentialprovider.kubelet.k8s.io/v1
+  notify: Restart k3s for the credential provider
+
 - name: Set up the server
   ansible.builtin.import_tasks: server.yaml
   when: inventory_hostname in groups['k3s_server']
