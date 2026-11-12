@@ -1,5 +1,5 @@
 import userEvent from '@testing-library/user-event';
-import { render, screen, cleanup } from '@testing-library/react';
+import { act, render, screen, cleanup } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { it, vi, expect, describe, afterEach, beforeEach } from 'vitest';
 
@@ -36,6 +36,8 @@ const order = (status: string) => ({
 function jsonResponse(body: unknown, status = 200) {
   return Promise.resolve(Response.json(body, { status }));
 }
+
+const isOrderRequest = (url: unknown) => String(url).startsWith('/api/orders');
 
 const isUrl = (url: unknown, expected: string) => String(url) === expected;
 
@@ -267,6 +269,68 @@ describe('product page', () => {
   });
 });
 
+describe('order page', () => {
+  it('polls every 2 seconds and stops at COMPLETED', async () => {
+    window.history.pushState(null, '', '/orders/42');
+    vi.useFakeTimers();
+    const statuses = ['PENDING', 'PROCESSING', 'COMPLETED'];
+    let polls = 0;
+    fetchMock.mockImplementation((input) => {
+      if (!isOrderRequest(input)) {
+        return jsonResponse(products[0]);
+      }
+      const status = statuses[Math.min(polls, statuses.length - 1)]!;
+      polls += 1;
+      return jsonResponse(order(status));
+    });
+    renderApp();
+
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(screen.getByRole('listitem', { current: 'step' }).textContent).toBe(
+      'Pending'
+    );
+    await act(() => vi.advanceTimersByTimeAsync(2100));
+    expect(screen.getByRole('listitem', { current: 'step' }).textContent).toBe(
+      'Processing'
+    );
+    await act(() => vi.advanceTimersByTimeAsync(2100));
+    expect(screen.getAllByText('Completed').length).toBeGreaterThan(0);
+
+    await act(() => vi.advanceTimersByTimeAsync(10000));
+    expect(polls).toBe(3);
+    expect(screen.getAllByText('BDT 900.00').length).toBeGreaterThan(0);
+  });
+
+  it('shows the failed state', async () => {
+    window.history.pushState(null, '', '/orders/42');
+    fetchMock.mockImplementation((input) =>
+      isOrderRequest(input)
+        ? jsonResponse(order('FAILED'))
+        : jsonResponse(products[0])
+    );
+    renderApp();
+
+    expect(await screen.findByText('Order failed')).toBeTruthy();
+    expect(screen.getByText('Failed')).toBeTruthy();
+    expect(screen.queryByLabelText('Order progress')).toBeNull();
+  });
+
+  it('shows an error for an unknown order', async () => {
+    window.history.pushState(null, '', '/orders/99');
+    fetchMock.mockImplementation(() =>
+      jsonResponse(
+        { statusCode: 404, message: 'Order not found.', error: 'Not Found' },
+        404
+      )
+    );
+    renderApp();
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Order not found.'
+    );
+  });
+});
+
 const cartLine = (productId: number, quantity: number) => ({
   productId,
   quantity
@@ -430,6 +494,93 @@ describe('placing an order from the cart', () => {
       { productId: 3, quantity: 1 }
     ]);
     expect(storedOrderIds()).toEqual([42]);
+  });
+});
+
+describe('my orders', () => {
+  it('lists stored ids with fetched statuses', async () => {
+    window.history.pushState(null, '', '/orders');
+    window.localStorage.setItem(
+      'shoplite.orders',
+      JSON.stringify([
+        { id: 43, placedAt: '2026-11-12T11:00:00.000Z' },
+        { id: 42, placedAt: '2026-11-12T10:00:00.000Z' }
+      ])
+    );
+    fetchMock.mockImplementation((input) => {
+      if (isUrl(input, '/api/orders/43')) {
+        return jsonResponse({ ...order('COMPLETED'), id: 43 });
+      }
+      if (isUrl(input, '/api/orders/42')) {
+        return jsonResponse(order('PENDING'));
+      }
+      return jsonResponse(products);
+    });
+    renderApp();
+
+    expect(await screen.findByText('Completed')).toBeTruthy();
+    expect(screen.getByText('Pending')).toBeTruthy();
+    expect(await screen.findAllByText('Jute Tote Bag')).toHaveLength(2);
+    expect(screen.getAllByText('BDT 900.00')).toHaveLength(2);
+    expect(screen.getByText('#42').getAttribute('href')).toBe('/orders/42');
+    expect(screen.getAllByRole('row')[1]!.textContent).toContain('#43');
+  });
+
+  it('shows the empty state when nothing was placed', () => {
+    window.history.pushState(null, '', '/orders');
+    renderApp();
+
+    expect(screen.getByText('No orders yet')).toBeTruthy();
+  });
+});
+
+describe('browser storage', () => {
+  it('renders and tells the user when storage is blocked', async () => {
+    window.history.pushState(null, '', '/products/1');
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('blocked', 'SecurityError');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('blocked', 'SecurityError');
+    });
+    fetchMock.mockImplementation(() => jsonResponse(products[0]));
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(await screen.findByText('Add to cart'));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Your browser is blocking storage'
+    );
+    expect(screen.getByLabelText('Cart, 0 items')).toBeTruthy();
+  });
+
+  it('resets a corrupt or invalid stored cart', () => {
+    window.history.pushState(null, '', '/cart');
+    window.localStorage.setItem('shoplite.cart', '{not json');
+    renderApp();
+
+    expect(screen.getByText('Your cart is empty')).toBeTruthy();
+    expect(window.localStorage.getItem('shoplite.cart')).toBeNull();
+    cleanup();
+
+    window.localStorage.setItem(
+      'shoplite.cart',
+      JSON.stringify([{ productId: 1, quantity: 'many' }])
+    );
+    renderApp();
+
+    expect(screen.getByText('Your cart is empty')).toBeTruthy();
+    expect(window.localStorage.getItem('shoplite.cart')).toBeNull();
+  });
+
+  it('resets a corrupt stored order list', () => {
+    window.history.pushState(null, '', '/orders');
+    window.localStorage.setItem('shoplite.orders', '[{"id":"x"}]');
+    renderApp();
+
+    expect(screen.getByText('No orders yet')).toBeTruthy();
+    expect(window.localStorage.getItem('shoplite.orders')).toBeNull();
   });
 });
 

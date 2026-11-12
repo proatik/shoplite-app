@@ -3,6 +3,8 @@ import { CartPage } from '@/pages/CartPage';
 import { useRoute } from '@/hooks/useRoute';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
+import { OrderPage } from '@/pages/OrderPage';
+import { OrdersPage } from '@/pages/OrdersPage';
 import { StateBox } from '@/components/StateBox';
 import { ProductPage } from '@/pages/ProductPage';
 import { buttonClasses } from '@/components/Button';
@@ -13,9 +15,11 @@ import { ToastProvider } from '@/components/ToastProvider';
 import type { ReactNode } from 'react';
 
 const PRODUCT_ROUTE = /^\/products\/(\d+)$/;
+const ORDER_ROUTE = /^\/orders\/(\d+)$/;
 
 function renderRoute(route: string): ReactNode {
   const productId = PRODUCT_ROUTE.exec(route)?.[1];
+  const orderId = ORDER_ROUTE.exec(route)?.[1];
 
   if (route === '/') {
     return <CataloguePage />;
@@ -23,11 +27,17 @@ function renderRoute(route: string): ReactNode {
   if (route === '/cart') {
     return <CartPage />;
   }
+  if (route === '/orders') {
+    return <OrdersPage />;
+  }
   if (route === '/placed') {
     return <OrderPlacedPage />;
   }
   if (productId) {
     return <ProductPage key={productId} id={Number(productId)} />;
+  }
+  if (orderId) {
+    return <OrderPage key={orderId} id={Number(orderId)} />;
   }
 
   return (
