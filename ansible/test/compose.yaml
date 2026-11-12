@@ -1,0 +1,27 @@
+name: shoplite-ansible-test
+
+x-node: &node
+  build: .
+  privileged: true
+  cgroup: private
+  tmpfs: [/run, /run/lock]
+  volumes:
+    - /var/lib/rancher/k3s
+
+services:
+  server:
+    <<: *node
+    hostname: shoplite-server
+    networks: { nodes: { ipv4_address: 172.31.250.10 } }
+    ports: ['127.0.0.1:2201:22']
+  agent:
+    <<: *node
+    hostname: shoplite-agent
+    networks: { nodes: { ipv4_address: 172.31.250.11 } }
+    ports: ['127.0.0.1:2202:22']
+
+networks:
+  nodes:
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24
