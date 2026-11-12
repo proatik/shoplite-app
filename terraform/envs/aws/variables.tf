@@ -99,10 +99,10 @@ variable "entry_points" {
   }
 }
 
-variable "github_repository" {
-  description = "owner/name of the repository whose main branch pushes images to ECR."
+variable "github_oidc_subject" {
+  description = "Subject prefix in shoplite-app's GitHub OIDC tokens. Immutable subjects carry the owner and repository ids; read it with: gh api repos/OWNER/REPO/actions/oidc/customization/sub."
   type        = string
-  default     = "proatik/shoplite-app"
+  default     = "repo:proatik@57863827/shoplite-app@1455091856"
 }
 
 variable "create_github_oidc_provider" {
