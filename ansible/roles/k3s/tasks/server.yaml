@@ -1,0 +1,64 @@
+- name: Configure the server
+  ansible.builtin.template:
+    src: server.yaml.j2
+    dest: /etc/rancher/k3s/config.yaml
+    mode: '0600'
+  notify: Restart k3s
+
+- name: Install the server unit
+  ansible.builtin.template:
+    src: k3s.service.j2
+    dest: /etc/systemd/system/k3s.service
+    mode: '0644'
+  vars:
+    k3s_mode: server
+    k3s_unit_type: notify
+  notify: Restart k3s
+
+- name: Run the server
+  ansible.builtin.systemd_service:
+    name: k3s
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Wait for the server node to be ready
+  ansible.builtin.command: k3s kubectl wait --for=condition=Ready node/{{ ansible_facts['hostname'] }} --timeout=10s
+  register: k3s_node_ready
+  until: k3s_node_ready.rc == 0
+  retries: 36
+  delay: 5
+  changed_when: false
+
+- name: Read the control plane's taints
+  ansible.builtin.command: k3s kubectl get node {{ ansible_facts['hostname'] }} -o jsonpath={.spec.taints[*].key}
+  register: k3s_taints
+  changed_when: false
+
+- name: Keep application pods off the control plane
+  ansible.builtin.command: k3s kubectl taint node {{ ansible_facts['hostname'] }} node-role.kubernetes.io/control-plane:NoSchedule
+  when: "'node-role.kubernetes.io/control-plane' not in k3s_taints.stdout"
+  changed_when: true
+
+- name: Share the server address with the agents
+  ansible.builtin.set_fact:
+    k3s_server_address: '{{ k3s_node_ip }}'
+
+- name: Read the join token for the agents
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_node_token
+  no_log: true
+
+- name: Fetch the kubeconfig to the admin's machine
+  ansible.builtin.fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: '{{ k3s_kubeconfig_path }}'
+    flat: true
+
+- name: Keep the fetched kubeconfig readable by its owner only
+  ansible.builtin.file:
+    path: '{{ k3s_kubeconfig_path }}'
+    mode: '0600'
+  delegate_to: localhost
+  become: false

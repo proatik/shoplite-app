@@ -1,0 +1,5 @@
+k3s_version: v1.37.2+k3s1
+k3s_node_ip: "{{ ansible_facts['default_ipv4']['address'] }}"
+k3s_tls_sans: []
+# the server's kubeconfig points at 127.0.0.1:6443, where the ssm or ssh tunnel to the control plane lands.
+k3s_kubeconfig_path: "{{ lookup('ansible.builtin.env', 'HOME') }}/.kube/shoplite.yaml"

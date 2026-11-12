@@ -1,0 +1,31 @@
+- name: Create the ops group, the only group allowed to log in
+  ansible.builtin.group:
+    name: '{{ ops_group }}'
+    system: true
+
+- name: Keep the automation user able to log in
+  ansible.builtin.user:
+    name: '{{ ansible_user }}'
+    groups: '{{ ops_group }}'
+    append: true
+
+- name: Create the deploy user in ops with a locked password
+  ansible.builtin.user:
+    name: deploy
+    shell: /bin/bash
+    groups: '{{ ops_group }}'
+    append: true
+    password_lock: true
+
+- name: Authorise only deploy's own key
+  ansible.posix.authorized_key:
+    user: deploy
+    key: '{{ users_deploy_public_key }}'
+    exclusive: true
+
+- name: Let ops use sudo without a password, as its users have none
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/20-ops
+    content: "%{{ ops_group }} ALL=(ALL) NOPASSWD:ALL\n"
+    mode: '0440'
+    validate: visudo -cf %s

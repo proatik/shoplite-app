@@ -1,0 +1,3 @@
+admin_cidrs: [172.31.250.0/24]
+node_cidr: 172.31.250.0/24
+k3s_kubeconfig_path: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/shoplite-ansible/kubeconfig"

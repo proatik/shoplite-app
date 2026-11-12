@@ -1,0 +1,7 @@
+- name: Allow key logins only, for members of ops, with linux/sshd_config
+  ansible.builtin.copy:
+    src: '{{ linux_dir }}/sshd_config'
+    dest: /etc/ssh/sshd_config.d/10-shoplite.conf
+    mode: '0644'
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Restart ssh

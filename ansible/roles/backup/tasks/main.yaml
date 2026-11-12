@@ -1,0 +1,105 @@
+- name: Create the backup user without a login shell
+  ansible.builtin.user:
+    name: shoplite-backup
+    system: true
+    shell: /usr/sbin/nologin
+    home: /var/lib/shoplite-backup
+    create_home: true
+
+- name: Keep dumps readable by the backup user only
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: directory
+    owner: shoplite-backup
+    group: shoplite-backup
+    mode: '0750'
+  loop:
+    - /var/lib/shoplite-backup
+    - /var/backups/shoplite
+
+- name: Install the AWS CLI to copy dumps to S3
+  when: backup_s3_bucket | length > 0
+  block:
+    - name: Install unzip for the AWS CLI bundle
+      ansible.builtin.apt:
+        name: unzip
+
+    - name: Download the pinned AWS CLI bundle and verify its checksum
+      ansible.builtin.get_url:
+        url: 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64-{{ backup_aws_cli_version }}.zip'
+        dest: /tmp/awscli.zip
+        checksum: 'sha256:{{ backup_aws_cli_sha256 }}'
+        mode: '0644'
+
+    - name: Unpack the AWS CLI bundle
+      ansible.builtin.unarchive:
+        src: /tmp/awscli.zip
+        dest: /tmp
+        remote_src: true
+        creates: '/usr/local/aws-cli/v2/{{ backup_aws_cli_version }}'
+
+    - name: Install the AWS CLI outside snap, which the service sandbox cannot start
+      ansible.builtin.command: /tmp/aws/install --update --install-dir /usr/local/aws-cli --bin-dir /usr/local/bin
+      args:
+        creates: '/usr/local/aws-cli/v2/{{ backup_aws_cli_version }}'
+
+- name: Create the backup settings directory
+  ansible.builtin.file:
+    path: /etc/shoplite
+    state: directory
+    mode: '0755'
+
+- name: Tell the backup where to copy dumps
+  ansible.builtin.copy:
+    dest: /etc/shoplite/backup.env
+    content: "BACKUP_S3_BUCKET={{ backup_s3_bucket }}\n"
+    mode: '0644'
+
+- name: Wait for the backup service account token
+  ansible.builtin.command: >-
+    k3s kubectl -n {{ backup_namespace }} get secret postgres-backup-token
+    -o jsonpath={.data.token}
+  register: backup_token
+  until: backup_token.rc == 0 and backup_token.stdout | length > 0
+  retries: 60
+  delay: 10
+  changed_when: false
+  no_log: true
+
+- name: Read the certificate authority that signs the api server
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/tls/server-ca.crt
+  register: backup_ca
+
+- name: Give the backup user a kubeconfig limited to exec in postgres-0
+  ansible.builtin.template:
+    src: kubeconfig.j2
+    dest: /var/lib/shoplite-backup/kubeconfig
+    owner: shoplite-backup
+    group: shoplite-backup
+    mode: '0600'
+  no_log: true
+
+- name: Install the backup and restore scripts from linux/bin
+  ansible.builtin.copy:
+    src: '{{ linux_dir }}/bin/{{ item }}'
+    dest: /usr/local/sbin/{{ item }}
+    mode: '0755'
+  loop: [shoplite-backup, shoplite-restore]
+
+- name: Install the backup service and its nightly timer from linux/systemd
+  ansible.builtin.copy:
+    src: '{{ linux_dir }}/systemd/{{ item }}'
+    dest: /etc/systemd/system/{{ item }}
+    mode: '0644'
+  loop: [shoplite-backup.service, shoplite-backup.timer]
+  notify: Reload systemd
+
+- name: Flush the systemd reload before starting the timer
+  ansible.builtin.meta: flush_handlers
+
+- name: Run the backup timer
+  ansible.builtin.systemd_service:
+    name: shoplite-backup.timer
+    enabled: true
+    state: started

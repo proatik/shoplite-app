@@ -1,0 +1,15 @@
+# installed as /etc/ssh/sshd_config.d/10-shoplite.conf, which ubuntu's sshd_config includes first.
+# only members of ops log in, only with a key; root and passwords are refused.
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+AllowGroups ops
+MaxAuthTries 3
+LoginGraceTime 30
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding local
+ClientAliveInterval 300
+ClientAliveCountMax 2

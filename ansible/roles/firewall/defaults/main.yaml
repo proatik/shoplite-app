@@ -1,0 +1,2 @@
+firewall_cluster_cidrs: [10.42.0.0/16, 10.43.0.0/16]
+firewall_ingress_node_port: null
