@@ -420,7 +420,8 @@ jobs:
   release:
     name: Release to dev through GitOps
     needs: publish
-    if: needs.publish.result == 'success'
+    # always() keeps a skipped test job further up the chain from skipping the release.
+    if: always() && needs.publish.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     concurrency:
