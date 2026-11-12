@@ -1,0 +1,23 @@
+{
+  "forbidden": [
+    {
+      "name": "no-circular",
+      "comment": "a circular import makes boot order and module boundaries fragile.",
+      "severity": "error",
+      "from": {},
+      "to": { "circular": true }
+    },
+    {
+      "name": "core-does-not-import-jobs",
+      "comment": "core plumbing stays independent of the jobs.",
+      "severity": "error",
+      "from": { "path": "^src/core/" },
+      "to": { "path": "^src/jobs/" }
+    }
+  ],
+  "options": {
+    "doNotFollow": { "path": "node_modules" },
+    "tsPreCompilationDeps": true,
+    "tsConfig": { "fileName": "tsconfig.json" }
+  }
+}
