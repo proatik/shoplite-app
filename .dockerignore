@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/bundle
+**/*.tsbuildinfo
+
+**/.env
+**/.env.*
+
+# editing these must not invalidate the build cache.
+**/Dockerfile
+.dockerignore
+
+.git
+.husky
