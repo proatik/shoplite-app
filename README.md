@@ -8,13 +8,13 @@ repository.
 ## How it works
 
 ```mermaid
-flowchart TB
+flowchart LR
     B["Browser"] --> WEB["web · Nginx"]
     WEB -->|"/api"| API["catalog-api · NestJS"]
-    API <--> PG[("PostgreSQL")]
+    API -->|"products, orders"| PG[("PostgreSQL")]
     API -->|"LPUSH orders:pending"| Q[("Redis list")]
     Q -->|"BRPOP"| WK["order-worker · NestJS"]
-    WK --> PG
+    WK -->|"stock, status"| PG
 ```
 
 1. **The shopper browses and orders.** The web app lists products and posts
