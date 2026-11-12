@@ -14,6 +14,7 @@ metadata:
   name: catalog-api
   labels: {{- include "shoplite.labels" "catalog-api" | nindent 4 }}
   annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: {{ .Values.ingress.entryPoint }}
     traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-strip-api@kubernetescrd
 spec:
   ingressClassName: {{ .Values.ingress.className }}
@@ -30,6 +31,8 @@ kind: Ingress
 metadata:
   name: web
   labels: {{- include "shoplite.labels" "web" | nindent 4 }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: {{ .Values.ingress.entryPoint }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   rules:

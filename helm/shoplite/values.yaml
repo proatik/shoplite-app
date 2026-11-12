@@ -26,6 +26,8 @@ ingress:
   className: traefik
   # an empty host matches every host name, such as the ALB's DNS name.
   host: ''
+  # the traefik entrypoint, so each environment gets its own ALB listener.
+  entryPoint: web
   # pods in this namespace (the ingress controller) may reach web and catalog-api.
   controllerNamespace: traefik
 
