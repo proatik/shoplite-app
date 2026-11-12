@@ -17,8 +17,9 @@ flowchart LR
     WK -->|"stock, status"| PG
 ```
 
-1. **The shopper browses and orders.** The web app lists products and posts
-   one order per cart line to `POST /api/orders`.
+1. **The shopper browses and orders.** The web app lists products; the
+   shopper orders one product at a time from its page, which posts to
+   `POST /api/orders` and opens the order's status page.
 2. **The API accepts the order.** It saves the order as `PENDING`, pushes its
    id onto the `orders:pending` list and answers `201`.
 3. **The worker completes it.** It pops the id, checks and takes the stock in
@@ -168,7 +169,7 @@ shoplite-app/
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | Images built `FROM scratch`                    | node, musl and the bundled app only: about 140 MB, no shell, run as uid 10001                                                                  |
 | Prices stored in paisa, returned in taka       | integer money in the database; the API divides by 100 so the contract shows BDT                                                                |
-| Cart and order list in `localStorage`          | the API has no accounts, so the browser keeps what this shopper placed                                                                         |
+| Placed order ids in `localStorage`             | the API has no accounts, so My orders keeps the ids this browser placed                                                                        |
 | Default database password in compose           | `make up` must work on a clean machine; set `POSTGRES_PASSWORD` to override it                                                                 |
 | Ports bound to `127.0.0.1`                     | the local stack is not reachable from other machines                                                                                           |
 | Tracing off in compose                         | no collector runs locally; unset `OTEL_SDK_DISABLED` and set `OTEL_EXPORTER_OTLP_ENDPOINT` to export                                           |
