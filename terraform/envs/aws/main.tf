@@ -14,7 +14,7 @@ module "ecr" {
   repositories                = ["web", "catalog-api", "order-worker"]
   keep_images                 = 20
   force_delete                = true
-  github_repository           = var.github_repository
+  github_oidc_subject         = var.github_oidc_subject
   create_github_oidc_provider = var.create_github_oidc_provider
 }
 
@@ -95,7 +95,7 @@ data "aws_iam_policy_document" "ci_plan_assume" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:pull_request"]
+      values   = ["${var.github_oidc_subject}:pull_request"]
     }
   }
 }

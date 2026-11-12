@@ -18,8 +18,8 @@ variable "force_delete" {
   type        = bool
 }
 
-variable "github_repository" {
-  description = "owner/name of the repository whose main branch may push images."
+variable "github_oidc_subject" {
+  description = "Subject prefix in the app repository's GitHub OIDC tokens; only its main branch may push."
   type        = string
 }
 
