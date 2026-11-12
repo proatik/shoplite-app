@@ -3,15 +3,23 @@ import { useRoute } from '@/hooks/useRoute';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { StateBox } from '@/components/StateBox';
+import { ProductPage } from '@/pages/ProductPage';
 import { buttonClasses } from '@/components/Button';
 import { CataloguePage } from '@/pages/CataloguePage';
 import { ToastProvider } from '@/components/ToastProvider';
 
 import type { ReactNode } from 'react';
 
+const PRODUCT_ROUTE = /^\/products\/(\d+)$/;
+
 function renderRoute(route: string): ReactNode {
+  const productId = PRODUCT_ROUTE.exec(route)?.[1];
+
   if (route === '/') {
     return <CataloguePage />;
+  }
+  if (productId) {
+    return <ProductPage key={productId} id={Number(productId)} />;
   }
 
   return (

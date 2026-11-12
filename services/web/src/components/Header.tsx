@@ -8,6 +8,8 @@ import {
 
 import { cn } from '@/lib/cn';
 import { Link } from '@/components/Link';
+import { useCart } from '@/hooks/useCart';
+import { CountPill } from '@/components/CountPill';
 
 const SCROLLED_OFFSET_PX = 4;
 
@@ -34,6 +36,7 @@ export function Header({ route }: { route: string }) {
   const onCatalogue = route === '/' || route.startsWith('/products/');
   const onCart = route === '/cart';
   const onOrders = route.startsWith('/orders') || route === '/placed';
+  const { count } = useCart();
 
   return (
     <header
@@ -63,11 +66,13 @@ export function Header({ route }: { route: string }) {
           </Link>
           <Link
             href="/cart"
+            aria-label={count === 1 ? 'Cart, 1 item' : `Cart, ${count} items`}
             aria-current={onCart ? 'page' : undefined}
             className={NAV_LINK_CLASSES}
           >
             <ShoppingCart aria-hidden="true" />
             Cart
+            <CountPill count={count} />
           </Link>
           <Link
             href="/orders"

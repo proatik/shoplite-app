@@ -157,6 +157,105 @@ describe('catalogue pagination', () => {
   });
 });
 
+describe('product page', () => {
+  it('adds to the cart and updates the badge', async () => {
+    window.history.pushState(null, '', '/products/1');
+    fetchMock.mockImplementation(() => jsonResponse(products[0]));
+    const user = userEvent.setup();
+    renderApp();
+
+    const quantity = await screen.findByLabelText('Quantity');
+    await user.clear(quantity);
+    await user.type(quantity, '2');
+    await user.click(screen.getByText('Add to cart'));
+
+    expect(screen.getByLabelText('Cart, 2 items')).toBeTruthy();
+    expect(JSON.parse(window.localStorage.getItem('shoplite.cart')!)).toEqual([
+      { productId: 1, quantity: 2 }
+    ]);
+
+    await user.click(screen.getByText('Add to cart'));
+
+    expect(screen.getByLabelText('Cart, 4 items')).toBeTruthy();
+  });
+
+  it('shows the description for a product that has one', async () => {
+    window.history.pushState(null, '', '/products/1');
+    fetchMock.mockImplementation(() => jsonResponse(products[0]));
+    renderApp();
+
+    expect(
+      await screen.findByText('Sturdy golden-jute tote with cotton handles.')
+    ).toBeTruthy();
+    expect(screen.queryByText('Read more')).toBeNull();
+  });
+
+  it('collapses the description block when it is empty', async () => {
+    window.history.pushState(null, '', '/products/2');
+    fetchMock.mockImplementation(() => jsonResponse(products[1]));
+    renderApp();
+
+    const title = await screen.findByRole('heading', {
+      name: 'Brass Pitcher'
+    });
+
+    expect(title.nextElementSibling?.className).toContain('mt-auto');
+  });
+
+  it('clamps a long description and repeats it below', async () => {
+    window.history.pushState(null, '', '/products/1');
+    const description = 'Handwoven cotton. '.repeat(20).trim();
+    fetchMock.mockImplementation(() =>
+      jsonResponse({ ...products[0], description })
+    );
+    renderApp();
+
+    expect(await screen.findByText('Read more')).toBeTruthy();
+    expect(screen.getAllByText(description)).toHaveLength(2);
+    expect(screen.getByText('About this product')).toBeTruthy();
+  });
+
+  it('shows not found only for a 404', async () => {
+    window.history.pushState(null, '', '/products/9');
+    fetchMock.mockImplementation(() =>
+      jsonResponse(
+        { statusCode: 404, message: 'Product not found.', error: 'Not Found' },
+        404
+      )
+    );
+    renderApp();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Product not found' })
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('heading', { name: 'Product unavailable' })
+    ).toBeNull();
+  });
+
+  it('shows unavailable with a retry for other errors', async () => {
+    window.history.pushState(null, '', '/products/1');
+    fetchMock
+      .mockImplementationOnce(() =>
+        jsonResponse({ statusCode: 503, message: 'Service down.' }, 503)
+      )
+      .mockImplementationOnce(() => jsonResponse(products[0]));
+    const user = userEvent.setup();
+    renderApp();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Product unavailable' })
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('heading', { name: 'Product not found' })
+    ).toBeNull();
+
+    await user.click(screen.getByText('Try again'));
+
+    expect(await screen.findByText('Add to cart')).toBeTruthy();
+  });
+});
+
 describe('footer', () => {
   it('shows one line of text and the shop links', () => {
     fetchMock.mockImplementation(() => jsonResponse(products));
