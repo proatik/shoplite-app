@@ -26,4 +26,12 @@ export class EnvService {
   get postgresPoolMax(): number {
     return this.get('POSTGRES_POOL_MAX');
   }
+
+  get chaosLatencyMs(): number {
+    return this.get('CHAOS_LATENCY_MS');
+  }
+
+  get chaosErrorRate(): number {
+    return this.get('CHAOS_ERROR_RATE');
+  }
 }
