@@ -36,6 +36,7 @@ jobs:
       web: ${{ steps.compute.outputs.web }}
       images: ${{ steps.compute.outputs.images }}
       terraform: ${{ steps.compute.outputs.terraform }}
+      ansible: ${{ steps.compute.outputs.ansible }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -65,6 +66,7 @@ jobs:
           flag web 'services/web/'
           flag images 'services/|packages/|docker-compose.yml|\.dockerignore|Makefile|scripts/'
           flag terraform 'terraform/'
+          flag ansible 'ansible/|linux/'
           cat "$GITHUB_OUTPUT"
 
   lint:
@@ -271,6 +273,29 @@ jobs:
             fi
           } > "$body"
           gh pr comment "$PR" --edit-last --body-file "$body" || gh pr comment "$PR" --body-file "$body"
+
+  # the container test in ansible/test runs locally; it needs about 15 minutes of privileged systemd nodes.
+  ansible:
+    name: Ansible and shell checks
+    needs: changes
+    if: needs.changes.outputs.ansible == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: install the pinned ansible tools
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ansible"
+          "$RUNNER_TEMP/ansible/bin/pip" install --quiet ansible-core==2.21.6 ansible-lint==26.10.1
+          echo "$RUNNER_TEMP/ansible/bin" >> "$GITHUB_PATH"
+      - name: ansible-lint
+        working-directory: ansible
+        run: |
+          ansible-galaxy collection install -r requirements.yaml > /dev/null
+          ansible-lint
+      - name: shellcheck the scripts
+        if: ${{ !cancelled() }}
+        run: shellcheck --severity=warning linux/bin/* linux/firewall/ufw.sh ansible/test/run.sh
 
   # runs alongside lint and the tests; only publishing waits for them.
   images:
