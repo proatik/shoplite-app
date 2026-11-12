@@ -123,6 +123,8 @@ The stack runs in the `monitoring` namespace; the chart connects to it when
 | Dashboards | Grafana                              | `monitoring/dashboards/golden-signals.json`, provisioned from Git         |
 | Alerts     | Alertmanager                         | `monitoring/alert-rules/shoplite.yaml`, each alert linking to its runbook |
 
+Grafana is served at `http://<alb>/grafana` on the prod listener, behind its admin login.
+
 The signals link to each other, so one order can be followed from an alert to the exact request:
 
 1. A latency panel shows exemplar dots; each one opens the trace of that request in Tempo.

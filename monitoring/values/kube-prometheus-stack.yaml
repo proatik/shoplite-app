@@ -50,6 +50,19 @@ alertmanager:
               {{ end }}
 
 grafana:
+  # served at http://<alb>/grafana on the prod listener, so the demo needs no port-forward or lab proxy.
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: web
+    hosts: []
+    path: /grafana
+    pathType: Prefix
+  grafana.ini:
+    server:
+      root_url: '%(protocol)s://%(domain)s/grafana'
+      serve_from_sub_path: true
   admin:
     existingSecret: grafana-admin
     userKey: admin-user
