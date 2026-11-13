@@ -53,6 +53,14 @@ make down    # stop the stack; data stays in the named volumes
 The shop opens on http://localhost:8080. On first start the `db-init` job
 applies the migrations and loads 50 demo products.
 
+`make load` drives a steady shop-like mix with [k6](https://k6.io): product
+pages, catalogue views and about 2 orders a second, 25 requests a second in all
+by default. It needs `BASE_URL`; `RATE` and `DURATION` are optional:
+
+```bash
+BASE_URL=http://localhost:8080 DURATION=1m make load
+```
+
 ## Tests
 
 Requirements: Node 22 with Corepack enabled (it provides the pinned pnpm).
@@ -136,6 +144,7 @@ The signals link to each other, so one order can be followed from an alert to th
 
 `terraform/` builds the VPC, the private k3s nodes, the public ALB, the ECR repositories and the
 CI roles; see [terraform/README.md](terraform/README.md) for the steps and the security choices.
+The whole AWS picture is in [docs/architecture-diagram](docs/architecture-diagram/README.md).
 
 ## Repository layout
 
@@ -154,15 +163,23 @@ shoplite-app/
 │   ├── modules/          network, compute, alb, ecr, plus bastion and backup_bucket
 │   ├── envs/aws/         the AWS environment, CI roles, budget and Ansible inventory
 │   └── state/            the S3 bucket that holds Terraform state
+├── ansible/              node hardening, k3s and the backup service
+├── linux/                sshd_config, systemd units, the firewall script and evidence
 ├── monitoring/
 │   ├── dashboards/       the Golden Signals dashboard, loaded by Grafana's sidecar
 │   ├── alert-rules/      the five alerts as a PrometheusRule
 │   ├── runbooks/         one runbook per alert
 │   └── values/           Helm values for kube-prometheus-stack, Loki, Tempo and Alloy
+├── docs/
+│   ├── architecture-diagram/  the AWS architecture and its trade-offs
+│   └── RCA/              the chaos-day root cause analysis
 ├── scripts/
-│   └── smoke-test.sh     end-to-end check used by make smoke
+│   ├── smoke-test.sh     end-to-end check used by make smoke
+│   ├── load-test.js      the k6 load mix used by make load
+│   └── install-tools.sh  the pinned tools a lab VM needs
+├── .github/workflows/    CI: lint, tests, image scan, ECR publish and release to dev
 ├── docker-compose.yml    the full stack with health checks and hardening
-└── Makefile              build, up, down, test and smoke targets
+└── Makefile              build, up, down, test, smoke and load targets
 ```
 
 ## Design notes

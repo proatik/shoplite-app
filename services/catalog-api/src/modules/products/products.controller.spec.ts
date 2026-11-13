@@ -71,4 +71,8 @@ describe('ProductsController', () => {
   it('GET /products/:id answers 400 for an id that is not a number', async () => {
     await request(app.getHttpServer()).get('/products/abc').expect(400);
   });
+
+  it('GET /products/:id answers 400 for an id beyond the integer column', async () => {
+    await request(app.getHttpServer()).get('/products/3000000000').expect(400);
+  });
 });

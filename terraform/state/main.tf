@@ -14,8 +14,8 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project   = "shoplite"
-      ManagedBy = "terraform"
+      project    = "shoplite"
+      managed-by = "terraform"
     }
   }
 }

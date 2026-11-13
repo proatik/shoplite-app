@@ -73,7 +73,7 @@ describe('ProcessOrderService (Postgres)', () => {
   });
 
   afterAll(async () => {
-    await database.onModuleDestroy();
+    await database.onApplicationShutdown();
   });
 
   it('completes an order in 1 to 2 seconds and takes its stock', async () => {

@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 PNPM := corepack pnpm
 
-.PHONY: help build up down test smoke
+.PHONY: help build up down test smoke load
 
 help:
 	@echo 'make build   build the catalog-api, order-worker and web images'
@@ -11,6 +11,7 @@ help:
 	@echo 'make down    stop the stack (data in the named volumes is kept)'
 	@echo 'make test    run the unit tests of every package and service'
 	@echo 'make smoke   place an order end to end and wait for COMPLETED'
+	@echo 'make load    steady k6 load; BASE_URL required, RATE and DURATION optional'
 
 build:
 	docker compose build
@@ -28,3 +29,6 @@ test:
 
 smoke:
 	scripts/smoke-test.sh
+
+load:
+	k6 run scripts/load-test.js

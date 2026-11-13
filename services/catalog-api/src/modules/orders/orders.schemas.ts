@@ -1,18 +1,18 @@
 import { z } from 'zod';
 
-import { ORDER_STATUSES } from '@shoplite/database';
+import { MAX_ID, ORDER_STATUSES } from '@shoplite/database';
 
 export const MAX_ORDER_QUANTITY = 100;
 
 export const CreateOrderSchema = z.object({
-  product_id: z.number().int().positive(),
+  product_id: z.number().int().positive().max(MAX_ID),
   quantity: z.number().int().positive().max(MAX_ORDER_QUANTITY)
 });
 
 export type CreateOrder = z.infer<typeof CreateOrderSchema>;
 
 export const OrderParamsSchema = z.object({
-  id: z.coerce.number().int().positive()
+  id: z.coerce.number().int().positive().max(MAX_ID)
 });
 
 export type OrderParams = z.infer<typeof OrderParamsSchema>;

@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
+import { MAX_ID } from '@shoplite/database';
+
 export const ProductParamsSchema = z.object({
-  id: z.coerce.number().int().positive()
+  id: z.coerce.number().int().positive().max(MAX_ID)
 });
 
 export type ProductParams = z.infer<typeof ProductParamsSchema>;

@@ -4,6 +4,7 @@ import {
   Gauge,
   Counter,
   Histogram,
+  createLogger,
   ORDER_QUEUE_KEY,
   createMetricsRegistry
 } from '@shoplite/shared';
@@ -44,12 +45,25 @@ export class MetricsService {
     registers: [this.registry]
   });
 
+  private readonly logger = createLogger(MetricsService.name);
+
   constructor(redis: RedisService) {
+    const logger = this.logger;
+
     new Gauge({
       name: 'order_queue_depth',
       help: `Orders waiting in the ${ORDER_QUEUE_KEY} list.`,
       registers: [this.registry],
       async collect() {
+        // an LLEN queued while redis is down would stall the whole scrape.
+        if (redis.client.status !== 'ready') {
+          logger.warn('queue depth not read: redis is not ready', {
+            redis_status: redis.client.status
+          });
+
+          return;
+        }
+
         this.set(await redis.client.llen(ORDER_QUEUE_KEY));
       }
     });
