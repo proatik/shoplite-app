@@ -3,14 +3,15 @@
 # and on k3s nodes the cluster ports from the node network only. Safe to run again: it only adds what
 # is missing and prints "firewall changed" when the rules differ from before.
 #
-#   ADMIN_CIDRS        networks allowed to ssh, space separated (required)
+#   ADMIN_CIDRS        networks allowed to ssh, space separated (required; empty opens no ssh port,
+#                      as under ssm, where ssh arrives over loopback from the ssm agent)
 #   NODE_CIDR          the private node network; set it on k3s nodes to open the cluster ports
 #   K3S_ROLE           server or agent; the server also opens the kubernetes api
 #   INGRESS_NODE_PORTS the ingress NodePorts the load balancer reaches, one per environment
 #   CLUSTER_CIDRS      pod and service networks, space separated
 set -euo pipefail
 
-: "${ADMIN_CIDRS:?set ADMIN_CIDRS to the networks allowed to ssh}"
+: "${ADMIN_CIDRS?set ADMIN_CIDRS to the networks allowed to ssh, or to empty under ssm}"
 
 before=$(ufw status verbose)
 
