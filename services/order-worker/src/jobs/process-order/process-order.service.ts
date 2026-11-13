@@ -2,8 +2,9 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 import { Injectable } from '@nestjs/common';
 import { eq, and, gte, sql } from 'drizzle-orm';
+import { SpanKind } from '@opentelemetry/api';
 
-import { dbSpan } from '@shoplite/shared';
+import { dbSpan, traced } from '@shoplite/shared';
 import { orders, products } from '@shoplite/database';
 
 import { EnvService } from '@/core/config/env.service';
@@ -100,9 +101,23 @@ export class ProcessOrderService {
     );
   }
 
+  // traced like any query, so a slow-db incident shows in the trace, not as a gap.
   private async slowDownIfAsked(): Promise<void> {
-    if (this.env.chaosSlowDb) {
-      await this.database.db.execute(sql`select pg_sleep(2)`);
+    if (!this.env.chaosSlowDb) {
+      return;
     }
+
+    await traced(
+      'SELECT pg_sleep',
+      {
+        kind: SpanKind.CLIENT,
+        attributes: {
+          'db.system.name': 'postgresql',
+          'db.operation.name': 'SELECT',
+          'db.query.text': 'select pg_sleep(2)'
+        }
+      },
+      async () => await this.database.db.execute(sql`select pg_sleep(2)`)
+    );
   }
 }
