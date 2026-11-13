@@ -74,6 +74,15 @@ describe('OrdersController', () => {
       .expect(400);
   });
 
+  it('POST /orders answers 400 for a product_id beyond the integer column', async () => {
+    await request(app.getHttpServer())
+      .post('/orders')
+      .send({ product_id: 3000000000, quantity: 1 })
+      .expect(400);
+
+    expect(orders.create).not.toHaveBeenCalled();
+  });
+
   it('POST /orders answers 409 when the stock is too low', async () => {
     orders.create.mockRejectedValue(
       new ConflictException('Not enough stock for this product.')
@@ -119,5 +128,11 @@ describe('OrdersController', () => {
     orders.findOne.mockRejectedValue(new NotFoundException('Order not found.'));
 
     await request(app.getHttpServer()).get('/orders/7').expect(404);
+  });
+
+  it('GET /orders/:id answers 400 for an id beyond the integer column', async () => {
+    await request(app.getHttpServer()).get('/orders/3000000000').expect(400);
+
+    expect(orders.findOne).not.toHaveBeenCalled();
   });
 });
