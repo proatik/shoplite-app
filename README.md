@@ -136,6 +136,7 @@ The signals link to each other, so one order can be followed from an alert to th
 
 `terraform/` builds the VPC, the private k3s nodes, the public ALB, the ECR repositories and the
 CI roles; see [terraform/README.md](terraform/README.md) for the steps and the security choices.
+The whole AWS picture is in [docs/architecture-diagram](docs/architecture-diagram/README.md).
 
 ## Repository layout
 
@@ -154,13 +155,19 @@ shoplite-app/
 │   ├── modules/          network, compute, alb, ecr, plus bastion and backup_bucket
 │   ├── envs/aws/         the AWS environment, CI roles, budget and Ansible inventory
 │   └── state/            the S3 bucket that holds Terraform state
+├── ansible/              node hardening, k3s and the backup service
+├── linux/                sshd_config, systemd units, the firewall script and evidence
 ├── monitoring/
 │   ├── dashboards/       the Golden Signals dashboard, loaded by Grafana's sidecar
 │   ├── alert-rules/      the five alerts as a PrometheusRule
 │   ├── runbooks/         one runbook per alert
 │   └── values/           Helm values for kube-prometheus-stack, Loki, Tempo and Alloy
+├── docs/
+│   ├── architecture-diagram/  the AWS architecture and its trade-offs
+│   └── RCA/              the chaos-day root cause analysis
 ├── scripts/
 │   └── smoke-test.sh     end-to-end check used by make smoke
+├── .github/workflows/    CI: lint, tests, image scan, ECR publish and release to dev
 ├── docker-compose.yml    the full stack with health checks and hardening
 └── Makefile              build, up, down, test and smoke targets
 ```
