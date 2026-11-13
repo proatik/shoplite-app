@@ -1,12 +1,12 @@
 import { Redis } from 'ioredis';
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnApplicationShutdown } from '@nestjs/common';
 
 import { createLogger } from '@shoplite/shared';
 
 import { EnvService } from '@/core/config/env.service';
 
 @Injectable()
-export class RedisService implements OnModuleDestroy {
+export class RedisService implements OnApplicationShutdown {
   readonly client: Redis;
   private readonly logger = createLogger(RedisService.name);
 
@@ -17,7 +17,7 @@ export class RedisService implements OnModuleDestroy {
     });
   }
 
-  async onModuleDestroy(): Promise<void> {
+  async onApplicationShutdown(): Promise<void> {
     await this.client.quit();
   }
 }
