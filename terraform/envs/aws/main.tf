@@ -149,3 +149,4 @@ resource "local_file" "inventory" {
     ssh_private_key_path = var.ssh_private_key_path
   })
 }
+# plan check 2026-11-14-2252
