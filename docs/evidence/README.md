@@ -246,6 +246,12 @@ Every monitoring pod up and ready.
 
 ![Stack running](images/q6-02-monitoring-pods.png)
 
+### Scrape targets up
+
+node-exporter, kube-state-metrics and the app. Captured on 16 Nov, in a later lab session that rebuilt the stack from the same repositories.
+
+![Scrape targets up](images/q6-03-prometheus-targets.png)
+
 ### The six application metrics
 
 Raw output of the /metrics endpoint.
