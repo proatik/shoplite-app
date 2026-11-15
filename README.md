@@ -97,7 +97,7 @@ All flags are off by default. Set them in the shell before `make up`.
 | -------------- | ----------------------------------- | ------------------------------------------------------------------------------- |
 | `web`          | Deployment, 2 replicas              | Ingress path `/`                                                                |
 | `catalog-api`  | Deployment, 2 replicas              | liveness `/healthz`, readiness `/readyz`, PDB `minAvailable: 1`, Ingress `/api` |
-| `order-worker` | Deployment with an HPA from 1 to 4  | scales on CPU; a 30 s grace period lets the current order finish                |
+| `order-worker` | Deployment with an HPA from 1 to 4  | 4 consumers per pod, scales on CPU; a 30 s grace period lets orders finish      |
 | `postgres`     | StatefulSet with a PVC              | migrated and seeded by the `db-init` init container of `catalog-api`            |
 | `redis`        | Deployment with a ClusterIP Service | holds the `orders:pending` queue                                                |
 

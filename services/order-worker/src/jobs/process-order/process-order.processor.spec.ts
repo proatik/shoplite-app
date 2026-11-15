@@ -1,5 +1,6 @@
 import { it, vi, expect, describe, beforeEach } from 'vitest';
 
+import { CONSUMERS_PER_POD } from '@/jobs/process-order/process-order.constants';
 import { ProcessOrderProcessor } from '@/jobs/process-order/process-order.processor';
 
 import type { RedisService } from '@/core/redis/redis.service';
@@ -9,33 +10,34 @@ import type { ProcessOrderService } from '@/jobs/process-order/process-order.ser
 const processor = { process: vi.fn() };
 const metrics = { recordOrder: vi.fn() };
 
+// consumers pop from one shared queue; each gets its own connection, as in redis.
 function consumerWith(messages: (string | null)[]): {
   consumer: ProcessOrderProcessor;
-  quit: ReturnType<typeof vi.fn>;
+  quits: ReturnType<typeof vi.fn>[];
 } {
-  const quit = vi.fn().mockResolvedValue('OK');
-  let consumer: ProcessOrderProcessor;
-  const connection = {
-    brpop: vi.fn(() => {
-      const next = messages.shift();
+  const quits: ReturnType<typeof vi.fn>[] = [];
+  const duplicate = (): object => {
+    const quit = vi.fn().mockResolvedValue('OK');
+    quits.push(quit);
 
-      if (messages.length === 0) {
-        void consumer.beforeApplicationShutdown();
-      }
+    return {
+      brpop: vi.fn(() => {
+        const next = messages.shift();
 
-      return Promise.resolve(next ? ['orders:pending', next] : null);
-    }),
-    quit
+        return Promise.resolve(next ? ['orders:pending', next] : null);
+      }),
+      quit
+    };
   };
-  const redis = { client: { duplicate: () => connection } };
+  const redis = { client: { duplicate } };
 
-  consumer = new ProcessOrderProcessor(
+  const consumer = new ProcessOrderProcessor(
     redis as unknown as RedisService,
     metrics as unknown as MetricsService,
     processor as unknown as ProcessOrderService
   );
 
-  return { consumer, quit };
+  return { consumer, quits };
 }
 
 describe('ProcessOrderProcessor', () => {
@@ -45,7 +47,7 @@ describe('ProcessOrderProcessor', () => {
 
   it('processes a queued order and records its result', async () => {
     processor.process.mockResolvedValue('COMPLETED');
-    const { consumer, quit } = consumerWith(['{"order_id":42}', null]);
+    const { consumer } = consumerWith(['{"order_id":42}', null]);
 
     consumer.onApplicationBootstrap();
     await consumer.beforeApplicationShutdown();
@@ -56,7 +58,19 @@ describe('ProcessOrderProcessor', () => {
       expect.any(Number),
       expect.any(String)
     );
-    expect(quit).toHaveBeenCalled();
+  });
+
+  it('runs one consumer per connection and closes each on shutdown', async () => {
+    processor.process.mockResolvedValue('COMPLETED');
+    const orders = ['{"order_id":1}', '{"order_id":2}', '{"order_id":3}'];
+    const { consumer, quits } = consumerWith(orders);
+
+    consumer.onApplicationBootstrap();
+    await consumer.beforeApplicationShutdown();
+
+    expect(processor.process).toHaveBeenCalledTimes(3);
+    expect(quits).toHaveLength(CONSUMERS_PER_POD);
+    quits.forEach((quit) => expect(quit).toHaveBeenCalledOnce());
   });
 
   it('records a FAILED order as failed', async () => {

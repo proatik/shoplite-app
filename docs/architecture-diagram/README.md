@@ -24,4 +24,7 @@
   uses a bastion that only the admin address can reach. `admin_access=ssm` remains the default.
 - **One NAT gateway.** Both private subnets route through the NAT in the first zone, which keeps the
   lab cost down; losing that zone stops outbound traffic until it returns.
+- **Worker sized by consumers, scaled on CPU.** Each worker pod runs 4 queue consumers, about 2.7
+  orders/s against the load test's 2. Orders mostly wait, so CPU rises little; scaling on queue depth
+  would need KEDA or a metrics adapter, which this cluster does not run.
 - **k3s, not kubeadm.** k3s ships containerd as the container runtime and needs one binary per node.

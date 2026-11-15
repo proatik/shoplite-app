@@ -16,6 +16,7 @@ import { MetricsService } from '@/core/metrics/metrics.service';
 import { ProcessOrderService } from '@/jobs/process-order/process-order.service';
 import {
   RETRY_DELAY_MS,
+  CONSUMERS_PER_POD,
   POP_TIMEOUT_SECONDS
 } from '@/jobs/process-order/process-order.constants';
 
@@ -32,8 +33,8 @@ export class ProcessOrderProcessor
 {
   private readonly logger = createLogger(ProcessOrderProcessor.name);
   private running = false;
-  private loop: Promise<void> = Promise.resolve();
-  private connection: Redis | undefined;
+  private loops: Promise<void>[] = [];
+  private connections: Redis[] = [];
 
   constructor(
     private readonly redis: RedisService,
@@ -42,18 +43,27 @@ export class ProcessOrderProcessor
   ) {}
 
   onApplicationBootstrap(): void {
-    // a blocking BRPOP needs its own connection.
-    this.connection = this.redis.client.duplicate();
+    // a blocking BRPOP holds its connection, so each consumer gets its own.
+    this.connections = Array.from({ length: CONSUMERS_PER_POD }, () =>
+      this.redis.client.duplicate()
+    );
     this.running = true;
-    this.loop = this.consume(this.connection);
-    this.logger.log('order consumer started', { queue: ORDER_QUEUE_KEY });
+    this.loops = this.connections.map(
+      async (connection) => await this.consume(connection)
+    );
+    this.logger.log('order consumers started', {
+      queue: ORDER_QUEUE_KEY,
+      consumers: CONSUMERS_PER_POD
+    });
   }
 
   async beforeApplicationShutdown(): Promise<void> {
     this.running = false;
-    await this.loop;
-    await this.connection?.quit();
-    this.logger.log('order consumer stopped');
+    await Promise.all(this.loops);
+    await Promise.all(
+      this.connections.map(async (connection) => await connection.quit())
+    );
+    this.logger.log('order consumers stopped');
   }
 
   private async consume(connection: Redis): Promise<void> {
