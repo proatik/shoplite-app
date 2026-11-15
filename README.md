@@ -5,6 +5,12 @@ takes orders, and a background worker that completes them through a Redis
 queue. Argo CD configuration lives in the separate `shoplite-gitops`
 repository.
 
+The checkpoint screenshots are published at
+<https://shoplite-evidence.netlify.app/> and kept in
+[docs/evidence](docs/evidence/README.md).
+[docs/BRIEF-MAP.md](docs/BRIEF-MAP.md) maps every brief requirement to its file
+and screenshot.
+
 ## How it works
 
 ```mermaid
@@ -171,7 +177,9 @@ shoplite-app/
 │   ├── runbooks/         one runbook per alert
 │   └── values/           Helm values for kube-prometheus-stack, Loki, Tempo and Alloy
 ├── docs/
+│   ├── BRIEF-MAP.md      every brief requirement, where it is met and its screenshot
 │   ├── architecture-diagram/  the AWS architecture and its trade-offs
+│   ├── evidence/         the checkpoint screenshots with captions
 │   └── RCA/              the chaos-day root cause analysis
 ├── scripts/
 │   ├── smoke-test.sh     end-to-end check used by make smoke
