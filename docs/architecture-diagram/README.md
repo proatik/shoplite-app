@@ -20,8 +20,9 @@
 
 ## Trade-offs
 
-- **Bastion, not SSM.** The lab account's organisation policy blocks Session Manager, so admin access
-  uses a bastion that only the admin address can reach. `admin_access=ssm` remains the default.
+- **Bastion, not SSM.** The lab account blocks Session Manager, so admin access uses a bastion
+  reachable only from the admin address ([details](../../terraform/README.md#security)).
+  `admin_access=ssm` remains the default.
 - **One NAT gateway.** Both private subnets route through the NAT in the first zone, which keeps the
   lab cost down; losing that zone stops outbound traffic until it returns.
 - **Worker sized by consumers, scaled on CPU.** Each worker pod runs 4 queue consumers, about 2.7

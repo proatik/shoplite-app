@@ -11,13 +11,12 @@
 | Time to recover | 25 minutes, from the first alert (17:23) to `QueueBacklog` resolving (17:48)                            |
 
 No peer was available, so `shoplite-gitops/scripts/chaos.sh` played the peer: it turned on one
-random flag in `envs/prod/values.yaml`, committed it as `chore: tune prod settings` and did not say
-which flag it chose. The Git diff and the pod environment stayed closed until the root cause below
-was found in Grafana.
+random flag in `envs/prod/values.yaml` and committed it as `chore: tune prod settings`. The Git diff
+and the pod environment stayed closed until Grafana showed the root cause below.
 
 ## 1. Timeline
 
-All times in UTC, read from Grafana, Slack and Git. The lab clock showed UTC+6.
+All times are UTC, read from Grafana, Slack and Git (the lab clock showed UTC+6).
 
 | Time  | Event                                                                                         |
 | ----- | --------------------------------------------------------------------------------------------- |
@@ -40,13 +39,12 @@ All times in UTC, read from Grafana, Slack and Git. The lab clock showed UTC+6.
   stayed there (402 waiting at 17:20, peak about 600).
 - `HighLatency` and `HighErrorRate` stayed quiet: the API answered `/orders` in about 8 ms and the
   5xx rate was 0%. The fault therefore sat behind the queue, in the worker, not in the API.
-- Contributing factor: before the fault, one worker replica handled one order at a time, about 0.67
-  orders per second against the 2 the load test sends. The queue grew from 17:10, and an earlier run
-  had already fired `QueueBacklog` at 16:28 with no flag on. The fault turned a slow backlog into a
-  fast one.
-- So the alert alone did not prove a fault: it would have fired from the baseline backlog too. What
-  set this incident apart was **Order processing time** jumping from 1.5–2 s to about 6 s at 17:15,
-  the moment the fault reached prod. No alert watched that panel; the investigation below found it.
+- Contributing factor: before the fault one worker replica handled about 0.67 orders per second
+  against the 2 the load test sends, so the queue grew from 17:10, and an earlier run fired
+  `QueueBacklog` at 16:28 with no flag on.
+- So the alert alone did not prove a fault. What set this incident apart was **Order processing
+  time** jumping from 1.5–2 s to about 6 s at 17:15, the moment the fault reached prod; no alert
+  watched that panel.
 
 ## 3. Investigation
 
@@ -76,8 +74,8 @@ cutting the single worker's throughput to about 0.17 orders per second while ord
 
 ## 5. Recovery
 
-`make revert COMMIT=17a4396` created and pushed `83ae817` (`Revert "chore: tune prod settings"`) at
-17:41, and syncing `shoplite-prod` in Argo CD rolled the worker back to `CHAOS_SLOW_DB=false`. Order
+A `git revert` of `17a4396` was pushed as `83ae817` (`Revert "chore: tune prod settings"`) at 17:41,
+and syncing `shoplite-prod` in Argo CD rolled the worker back to `CHAOS_SLOW_DB=false`. Order
 processing time returned to 1.5–2 s, and from 17:44 the worker ran 3 replicas, which drained the
 600-order queue to 0. `QueueBacklog` resolved at 17:48: **25 minutes from first alert to recovery**,
 7 minutes from the revert.

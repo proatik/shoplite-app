@@ -1,6 +1,6 @@
 # Terraform
 
-Builds the AWS side of ShopLite as the brief's target architecture asks:
+Builds the AWS side of ShopLite:
 
 ```text
 Internet ──► ALB :80 (prod), :8080 (dev) ──► ingress NodePorts 30080, 30081 on the workers
@@ -50,9 +50,9 @@ terraform output -raw github_variables | gh variable set -R proatik/shoplite-app
 
 State locking uses S3's native lock file (`use_lockfile`), so no DynamoDB table is needed.
 `apply` writes `ansible/inventories/aws/hosts.yaml` (ignored by Git), which reaches every node by
-instance id through an SSM session, or by private address through the bastion. Run
-`terraform destroy` with the same variables when the session ends, and delete the GitHub
-variables, which would otherwise point CI at an account that no longer exists:
+instance id through an SSM session, or by private address through the bastion. When the session
+ends, run `terraform destroy` with the same variables and delete the GitHub variables (they would
+point CI at a dead account):
 
 ```bash
 for name in AWS_REGION AWS_ROLE_ARN AWS_PLAN_ROLE_ARN TF_STATE_BUCKET TF_SSH_PUBLIC_KEY \

@@ -1,8 +1,7 @@
 # Linux
 
-The configuration every ShopLite node runs. Ansible installs these files unchanged (see
-[`ansible/`](../ansible/README.md)), so what is here is exactly what runs on the servers. On a single
-Ubuntu server, the same files can be installed by hand.
+The configuration every ShopLite node runs; Ansible installs these files unchanged (see
+[`ansible/`](../ansible/README.md)). On a single Ubuntu server they can be installed by hand.
 
 | Brief                | File                                 | What it does                                                                                             |
 | -------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
@@ -19,9 +18,9 @@ hide its tracks; `0750` with one ACL gives exactly `ops` read access and nobody 
 
 ## Firewall on the k3s nodes
 
-Beyond 22, 80 and 443, the nodes also open the cluster ports (6443, 10250, 8472/udp, 9100 and the
-ingress NodePorts 30080 for prod and 30081 for dev) to the private node network only, so nothing else is reachable from outside the
-VPC. On a single server, set only `ADMIN_CIDRS`:
+Beyond 22, 80 and 443, the k3s nodes open the cluster ports (6443, 10250, 8472/udp, 9100) and the
+ingress NodePorts 30080 (prod) and 30081 (dev) to the private node network only. On a single
+server, set only `ADMIN_CIDRS`:
 
 ```bash
 sudo ADMIN_CIDRS=203.0.113.10/32 ./firewall/ufw.sh
