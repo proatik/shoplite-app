@@ -5,9 +5,9 @@
 | Date            | 14 November 2026                                                                                        |
 | Environment     | prod (`shoplite` namespace)                                                                             |
 | Load            | k6 at 25 requests per second for 15 minutes (product pages 15, catalogue 8, orders 2)                   |
-| First alert     | `QueueBacklog` at 17:23 UTC                                                                             |
+| First alert     | `QueueBacklog` at 17:23 UTC; the queue was already growing before the fault (see Detection)             |
 | Root cause      | `orderWorker.chaos.slowDb: true` (`CHAOS_SLOW_DB`): every order waits 2 s before each of its two writes |
-| Time to detect  | 8 minutes, from the fault reaching prod (17:15) to the first alert (17:23)                              |
+| Time to detect  | 8 minutes to the first alert; the fault's own signal, order processing time, moved at 17:15             |
 | Time to recover | 25 minutes, from the first alert (17:23) to `QueueBacklog` resolving (17:48)                            |
 
 No peer was available, so `shoplite-gitops/scripts/chaos.sh` played the peer: it turned on one
@@ -43,6 +43,9 @@ All times in UTC, read from Grafana, Slack and Git. The lab clock showed UTC+6.
   0.67 orders per second against the 2 the load test sends. The queue grew from 17:10, and an earlier
   run had already fired `QueueBacklog` at 16:28 with no flag on. The fault turned a slow backlog into
   a fast one.
+- So the alert alone did not prove a fault: it would have fired from the baseline backlog too. What
+  set this incident apart was **Order processing time** jumping from 1.5–2 s to about 6 s at 17:15,
+  the moment the fault reached prod. No alert watched that panel; the investigation below found it.
 
 ## 3. Investigation
 
@@ -81,13 +84,15 @@ revert.
 
 ## 6. Prevention
 
-**Protect `envs/prod` in `shoplite-gitops`.** Changes to `main` go through a reviewed pull request,
-and a CI check fails any pull request that turns on a chaos flag in `envs/prod/values.yaml`. An
+**Proposed: protect `envs/prod` in `shoplite-gitops`.** Changes to `main` would go through a reviewed
+pull request, and a CI check would fail any pull request that turns on a chaos flag in
+`envs/prod/values.yaml`. Neither exists yet: the chaos exercise itself needs a direct push to `main`. An
 innocuous message such as `chore: tune prod settings` then cannot hide a fault, because the diff is
 reviewed and checked before Argo CD sees it.
 
 Follow-up already done: the worker now runs four consumers per pod, about 2.7 orders per second
-(shoplite-app PR #22), so normal load no longer builds a backlog and a slow dependency shows up as a
+([shoplite-app PR #22](https://github.com/proatik/shoplite-app/pull/22)). The figures above describe
+the single-consumer worker at the time of the incident; with the follow-up, normal load no longer builds a backlog and a slow dependency shows up as a
 clear change in processing time.
 
 ## Evidence

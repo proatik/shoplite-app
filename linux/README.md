@@ -27,7 +27,7 @@ VPC. On a single server, set only `ADMIN_CIDRS`:
 sudo ADMIN_CIDRS=203.0.113.10/32 ./firewall/ufw.sh
 ```
 
-## Evidence to collect
+## Commands used for the evidence
 
 Keep a second SSH session open while changing SSH or the firewall.
 

@@ -97,7 +97,8 @@ All flags are off by default. Set them in the shell before `make up`.
 
 ## Deploy to Kubernetes
 
-`helm/shoplite` deploys all five components into one namespace:
+`helm/shoplite` deploys all five components into one namespace per environment, `shoplite` for prod
+and `shoplite-dev` for dev:
 
 | Component      | Kind                                | Details                                                                         |
 | -------------- | ----------------------------------- | ------------------------------------------------------------------------------- |
@@ -194,7 +195,7 @@ shoplite-app/
 
 | Choice                                         | Why                                                                                                                                            |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Images built `FROM scratch`                    | node, musl and the bundled app only: about 140 MB, no shell, run as uid 10001                                                                  |
+| Images built `FROM scratch`                    | node, musl and the bundled app only: catalog-api 140 MB, order-worker 139 MB, no shell, uid 10001                                              |
 | Prices stored in paisa, returned in taka       | integer money in the database; the API divides by 100 so the contract shows BDT                                                                |
 | Placed order ids in `localStorage`             | the API has no accounts, so My orders keeps the ids this browser placed                                                                        |
 | Default database password in compose           | `make up` must work on a clean machine; set `POSTGRES_PASSWORD` to override it                                                                 |

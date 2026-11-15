@@ -9,7 +9,7 @@ private subnets, no public addresses ──────┤
  ├─ control plane (k3s server)
  ├─ worker-1 (zone a)
  └─ worker-2 (zone b)
-NAT gateway ──► outbound only · admin access through AWS SSM (or a bastion)
+NAT gateway ──► outbound only · admin access through AWS SSM (default) or a bastion (the lab)
 ECR: web, catalog-api, order-worker · GitHub Actions pushes through OIDC
 ```
 
@@ -105,8 +105,9 @@ without changing tracked code. The state file then lives only on the machine tha
 ## Security
 
 - Nodes have no public addresses and no inbound rule from the internet. The only inbound traffic
-  is the ingress NodePort from the ALB's security group and the k3s ports between nodes. There is
-  no SSH port: administration goes through SSM sessions. With `admin_access = "bastion"` the nodes
+  is the ingress NodePort from the ALB's security group and the k3s ports between nodes. With the
+  default `admin_access = "ssm"` there is no SSH port: administration goes through SSM sessions.
+  The lab account blocks SSM sessions, so the lab uses `admin_access = "bastion"`: the nodes
   accept SSH from the bastion's security group only, and the bastion from `admin_cidr` only. The
   brief prefers SSM, so the bastion is a fallback, not the default.
 - Instances require IMDSv2 and have encrypted root volumes.
