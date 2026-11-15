@@ -5,6 +5,12 @@ takes orders, and a background worker that completes them through a Redis
 queue. Argo CD configuration lives in the separate `shoplite-gitops`
 repository.
 
+The checkpoint screenshots are published at
+<https://shoplite-evidence.netlify.app/> and kept in
+[docs/evidence](docs/evidence/README.md).
+[docs/BRIEF-MAP.md](docs/BRIEF-MAP.md) maps every brief requirement to its file
+and screenshot.
+
 ## How it works
 
 ```mermaid
