@@ -13,13 +13,15 @@ runbook starts from the **ShopLite — Golden Signals** dashboard in Grafana.
 
 ## Alerts
 
-| Alert           | Severity | What it means                                         | Runbook                                      |
-| --------------- | -------- | ----------------------------------------------------- | -------------------------------------------- |
-| HighErrorRate   | critical | over 5% of api requests fail with a 5xx for 5 minutes | [high-error-rate.md](high-error-rate.md)     |
-| HighLatency     | warning  | the api p95 latency is above 1 second for 5 minutes   | [high-latency.md](high-latency.md)           |
-| QueueBacklog    | warning  | over 50 orders wait in the queue for 10 minutes       | [queue-backlog.md](queue-backlog.md)         |
-| PodCrashLooping | critical | a container restarted in the last 10 minutes          | [pod-crash-looping.md](pod-crash-looping.md) |
-| NodeDiskFilling | warning  | a node filesystem is over 85% full                    | [node-disk-filling.md](node-disk-filling.md) |
+| Alert                       | Severity | What it means                                                 | Runbook                                        |
+| --------------------------- | -------- | ------------------------------------------------------------- | ---------------------------------------------- |
+| HighErrorRate               | critical | over 5% of api requests fail with a 5xx for 5 minutes         | [high-error-rate.md](high-error-rate.md)       |
+| HighLatency                 | warning  | the api p95 latency is above 1 second for 5 minutes           | [high-latency.md](high-latency.md)             |
+| QueueBacklog                | warning  | over 50 orders wait in the queue for 10 minutes               | [queue-backlog.md](queue-backlog.md)           |
+| PodCrashLooping             | critical | a container restarted in the last 10 minutes                  | [pod-crash-looping.md](pod-crash-looping.md)   |
+| NodeDiskFilling             | warning  | a node filesystem is over 85% full                            | [node-disk-filling.md](node-disk-filling.md)   |
+| OrdersLatencyBudgetFastBurn | critical | `POST /orders` spends its 500 ms SLO budget 14 times too fast | [orders-latency-slo.md](orders-latency-slo.md) |
+| OrdersLatencyBudgetSlowBurn | warning  | `POST /orders` spends its 500 ms SLO budget 6 times too fast  | [orders-latency-slo.md](orders-latency-slo.md) |
 
 ## Ground rules
 
