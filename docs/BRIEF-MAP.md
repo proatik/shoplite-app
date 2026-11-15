@@ -175,6 +175,13 @@ Evidence links point to [docs/evidence](evidence/README.md) and, for Question 3,
 | 8.2 (c) Recovery by reverting the Git commit           | [shoplite-gitops history](https://github.com/proatik/shoplite-gitops/commits/main)                                                                                | [q8-06](evidence/images/q8-06-revert-commit.png), [q8-06b](evidence/images/q8-06b-revert-github.png), [q8-06c](evidence/images/q8-06c-prod-sync-after-revert.png)                                   |
 | 8.2 (c) Recovery shown on the Grafana dashboard        | [golden-signals.json](../monitoring/dashboards/golden-signals.json)                                                                                               | [q8-07](evidence/images/q8-07-recovery-dashboard.png), [q8-07a](evidence/images/q8-07a-recovery-dashboard.png), [q8-07b](evidence/images/q8-07b-slack-resolved.png)                                 |
 
+## Bonus 4 · SLO and burn-rate alerting (+2 marks)
+
+| Requirement                                       | Where                                                                                                                             | Evidence |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| SLO for `POST /orders`: 99% under 500 ms          | [alert-rules/slo.yaml](../monitoring/alert-rules/slo.yaml)                                                                        | —        |
+| Multi-window burn-rate alerts (1h + 5m, 6h + 30m) | [alert-rules/slo.yaml](../monitoring/alert-rules/slo.yaml), [orders-latency-slo.md](../monitoring/runbooks/orders-latency-slo.md) | —        |
+
 ## Submission requirements
 
 | Requirement                                                      | Where                                                                                                                                                                                                      | Evidence                                               |

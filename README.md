@@ -173,7 +173,7 @@ shoplite-app/
 ├── linux/                sshd_config, systemd units, the firewall script and evidence
 ├── monitoring/
 │   ├── dashboards/       the Golden Signals dashboard, loaded by Grafana's sidecar
-│   ├── alert-rules/      the five alerts as a PrometheusRule
+│   ├── alert-rules/      the five alerts, plus the POST /orders latency SLO
 │   ├── runbooks/         one runbook per alert
 │   └── values/           Helm values for kube-prometheus-stack, Loki, Tempo and Alloy
 ├── docs/
