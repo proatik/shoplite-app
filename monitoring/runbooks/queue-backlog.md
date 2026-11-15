@@ -15,7 +15,7 @@
 ## 2. Diagnose
 
 1. **Orders created vs processed**: when created stays above processed, the worker cannot keep up.
-2. **Worker replicas**: the HPA scales the worker from 1 to 4 on CPU; check where it is.
+2. **Worker replicas**: each pod runs 4 consumers (about 2.7 orders/s); the HPA adds pods from 1 to 4 on CPU.
 3. **Order processing time**: the normal time is 1–2 seconds per order.
 4. Look at slow orders in Explore → Tempo:
    ```traceql
