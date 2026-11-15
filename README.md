@@ -171,7 +171,9 @@ shoplite-app/
 │   ├── runbooks/         one runbook per alert
 │   └── values/           Helm values for kube-prometheus-stack, Loki, Tempo and Alloy
 ├── docs/
+│   ├── BRIEF-MAP.md      every brief requirement, where it is met and its screenshot
 │   ├── architecture-diagram/  the AWS architecture and its trade-offs
+│   ├── evidence/         the checkpoint screenshots with captions
 │   └── RCA/              the chaos-day root cause analysis
 ├── scripts/
 │   ├── smoke-test.sh     end-to-end check used by make smoke
