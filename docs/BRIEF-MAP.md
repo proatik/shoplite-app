@@ -177,10 +177,10 @@ Evidence links point to [docs/evidence](evidence/README.md) and, for Question 3,
 
 ## Bonus 4 · SLO and burn-rate alerting (+2 marks)
 
-| Requirement                                       | Where                                                                                                                             | Evidence |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| SLO for `POST /orders`: 99% under 500 ms          | [alert-rules/slo.yaml](../monitoring/alert-rules/slo.yaml)                                                                        | —        |
-| Multi-window burn-rate alerts (1h + 5m, 6h + 30m) | [alert-rules/slo.yaml](../monitoring/alert-rules/slo.yaml), [orders-latency-slo.md](../monitoring/runbooks/orders-latency-slo.md) | —        |
+| Requirement                                       | Where                                                                                                                             | Evidence                                           |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| SLO for `POST /orders`: 99% under 500 ms          | [alert-rules/slo.yaml](../monitoring/alert-rules/slo.yaml)                                                                        | [b4-01](evidence/images/b4-01-slo-ratio.png)       |
+| Multi-window burn-rate alerts (1h + 5m, 6h + 30m) | [alert-rules/slo.yaml](../monitoring/alert-rules/slo.yaml), [orders-latency-slo.md](../monitoring/runbooks/orders-latency-slo.md) | [b4-00](evidence/images/b4-00-slo-rule-loaded.png) |
 
 ## Submission requirements
 

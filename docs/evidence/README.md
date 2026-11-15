@@ -420,7 +420,7 @@ The queue at 0 before the exercise.
 
 ### Fault planted
 
-One flag enabled in prod values, unseen.
+`make chaos` runs the script: one flag enabled in prod values, unseen.
 
 ![Fault planted](images/q8-00b-make-chaos.png)
 
@@ -531,3 +531,17 @@ The signals returning to normal.
 QueueBacklog cleared after recovery.
 
 ![Alert resolved](images/q8-07b-slack-resolved.png)
+
+## B4 · SLO & Burn-Rate Alerting
+
+### Rules loaded
+
+Argo CD synced the `shoplite-slo` PrometheusRule.
+
+![Rules loaded](images/b4-00-slo-rule-loaded.png)
+
+### SLO under load
+
+0% of orders slower than 500 ms in prod during the load test.
+
+![SLO under load](images/b4-01-slo-ratio.png)
