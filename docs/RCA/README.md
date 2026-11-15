@@ -11,13 +11,12 @@
 | Time to recover | 25 minutes, from the first alert (17:23) to `QueueBacklog` resolving (17:48)                            |
 
 No peer was available, so `shoplite-gitops/scripts/chaos.sh` played the peer: it turned on one
-random flag in `envs/prod/values.yaml`, committed it as `chore: tune prod settings` and did not say
-which flag it chose. The Git diff and the pod environment stayed closed until the root cause below
-was found in Grafana.
+random flag in `envs/prod/values.yaml` and committed it as `chore: tune prod settings`. The Git diff
+and the pod environment stayed closed until Grafana showed the root cause below.
 
 ## 1. Timeline
 
-All times in UTC, read from Grafana, Slack and Git. The lab clock showed UTC+6.
+All times are UTC, read from Grafana, Slack and Git (the lab clock showed UTC+6).
 
 | Time  | Event                                                                                         |
 | ----- | --------------------------------------------------------------------------------------------- |
@@ -35,17 +34,17 @@ All times in UTC, read from Grafana, Slack and Git. The lab clock showed UTC+6.
 
 `QueueBacklog` fired first: `max by (namespace) (order_queue_depth) > 50` for 10 minutes.
 
-- Orders arrived at 1–1.8 per second while the worker completed only 0.16 per second, so the
-  `orders:pending` queue grew past 50 and stayed there (402 waiting at 17:20, peak about 600).
-- `HighLatency` and `HighErrorRate` stayed quiet: the API answered `/orders` in about 8 ms and the 5xx
-  rate was 0%. The fault therefore sat behind the queue, in the worker, not in the API.
-- Contributing factor: before the fault, one worker replica handled one order at a time, about
-  0.67 orders per second against the 2 the load test sends. The queue grew from 17:10, and an earlier
-  run had already fired `QueueBacklog` at 16:28 with no flag on. The fault turned a slow backlog into
-  a fast one.
-- So the alert alone did not prove a fault: it would have fired from the baseline backlog too. What
-  set this incident apart was **Order processing time** jumping from 1.5–2 s to about 6 s at 17:15,
-  the moment the fault reached prod. No alert watched that panel; the investigation below found it.
+- The load test sent 2 orders per second; 1–1.8 were created (the rest were out-of-stock 409s),
+  while the worker completed only 0.16 per second, so the `orders:pending` queue grew past 50 and
+  stayed there (402 waiting at 17:20, peak about 600).
+- `HighLatency` and `HighErrorRate` stayed quiet: the API answered `/orders` in about 8 ms and the
+  5xx rate was 0%. The fault therefore sat behind the queue, in the worker, not in the API.
+- Contributing factor: before the fault one worker replica handled about 0.67 orders per second
+  against the 2 the load test sends, so the queue grew from 17:10, and an earlier run fired
+  `QueueBacklog` at 16:28 with no flag on.
+- So the alert alone did not prove a fault. What set this incident apart was **Order processing
+  time** jumping from 1.5–2 s to about 6 s at 17:15, the moment the fault reached prod; no alert
+  watched that panel.
 
 ## 3. Investigation
 
@@ -62,8 +61,8 @@ Grafana only, following [the queue-backlog runbook](../../monitoring/runbooks/qu
 3. **Trace (Tempo):** the trace of order 1668 (`8472fb4ab91b818eecbe59a33ee94ad6`) shows
    `POST /orders` at 17:16:28 taking 11 ms, then `order.process` starting only at 17:29:06, 12.6
    minutes later in the queue, and lasting 5.93 s. Inside it, each `UPDATE orders` is preceded by a
-   `SELECT pg_sleep` span of exactly 2 s. Its **Related logs** link opened the matching log line
-   for order 1668.
+   `SELECT pg_sleep` span of exactly 2 s. Its **Related logs** link opened the matching log line for
+   order 1668.
 
 ## 4. Root cause
 
@@ -75,28 +74,27 @@ cutting the single worker's throughput to about 0.17 orders per second while ord
 
 ## 5. Recovery
 
-`make revert COMMIT=17a4396` created and pushed `83ae817` (`Revert "chore: tune prod settings"`) at
-17:41, and syncing `shoplite-prod` in Argo CD rolled the worker back to `CHAOS_SLOW_DB=false`. Order
+A `git revert` of `17a4396` was pushed as `83ae817` (`Revert "chore: tune prod settings"`) at 17:41,
+and syncing `shoplite-prod` in Argo CD rolled the worker back to `CHAOS_SLOW_DB=false`. Order
 processing time returned to 1.5–2 s, and from 17:44 the worker ran 3 replicas, which drained the
-600-order queue to 0.
-`QueueBacklog` resolved at 17:48: **25 minutes from first alert to recovery**, 7 minutes from the
-revert.
+600-order queue to 0. `QueueBacklog` resolved at 17:48: **25 minutes from first alert to recovery**,
+7 minutes from the revert.
 
 ## 6. Prevention
 
-**Proposed: protect `envs/prod` in `shoplite-gitops`.** Changes to `main` would go through a reviewed
-pull request, and a CI check would fail any pull request that turns on a chaos flag in
-`envs/prod/values.yaml`. Neither exists yet: the chaos exercise itself needs a direct push to `main`. An
-innocuous message such as `chore: tune prod settings` then cannot hide a fault, because the diff is
-reviewed and checked before Argo CD sees it.
+**A CI guard on prod values.** A pull request to `shoplite-gitops` that turns on any chaos flag in
+`envs/prod/values.yaml` now fails the `Chaos guard` check
+([chaos-guard.yaml](https://github.com/proatik/shoplite-gitops/blob/main/.github/workflows/chaos-guard.yaml)),
+so an innocuous message such as `chore: tune prod settings` cannot hide a fault from review. The
+guard covers pull requests only: making every prod change go through one would need branch
+protection on `main`, which the chaos exercise itself bypasses by pushing directly.
 
-Follow-up already done: the worker now runs four consumers per pod, about 2.7 orders per second
+Follow-up: the worker now runs four consumers per pod, about 2.7 orders per second
 ([shoplite-app PR #22](https://github.com/proatik/shoplite-app/pull/22)). The figures above describe
-the single-consumer worker at the time of the incident; with the follow-up, normal load no longer builds a backlog and a slow dependency shows up as a
-clear change in processing time.
+the single-consumer worker at the time of the incident.
 
 ## Evidence
 
 The screenshots for each step are in the evidence pack, files `q8-00` to `q8-07`: the chaos run and
-sync (`q8-00`), load test (`q8-01`), first alert (`q8-02`), dashboard (`q8-03`), logs (`q8-04`), trace
-(`q8-05`), revert (`q8-06`) and recovery (`q8-07`).
+sync (`q8-00`), load test (`q8-01`), first alert (`q8-02`), dashboard (`q8-03`), logs (`q8-04`),
+trace (`q8-05`), revert (`q8-06`) and recovery (`q8-07`).

@@ -32,8 +32,7 @@ runbook starts from the **ShopLite — Golden Signals** dashboard in Grafana.
 | Follow one request across signals: panel → exemplar or trace → logs    | Decide from a single signal                                                   |
 | Use `kubectl` only to look: `get`, `describe`, `logs`, `top`, `events` | Delete a PersistentVolumeClaim: it holds the database                         |
 
-During the chaos exercise, diagnose with Grafana alone (Prometheus, Loki and Tempo); the Git diff
-and pod environment stay closed until the RCA is written.
+During the chaos exercise, diagnose with Grafana alone.
 
 ## How an order moves
 
