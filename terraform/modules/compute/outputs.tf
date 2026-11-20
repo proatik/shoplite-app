@@ -26,6 +26,11 @@ output "ami_id" {
   value       = data.aws_ami.ubuntu.id
 }
 
+output "node_role_name" {
+  description = "IAM role every node runs as."
+  value       = aws_iam_role.node.name
+}
+
 output "key_name" {
   description = "EC2 key pair installed for the ubuntu user."
   value       = aws_key_pair.admin.key_name

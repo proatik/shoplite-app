@@ -70,6 +70,16 @@ output "backup_bucket" {
   value       = var.enable_s3_backups ? module.backup_bucket[0].bucket_name : null
 }
 
+output "orders_queue_url" {
+  description = "URL of the SQS orders queue, or null when SQS is off."
+  value       = var.enable_sqs ? module.queue[0].orders_queue_url : null
+}
+
+output "confirmed_queue_url" {
+  description = "URL of the SQS order-confirmed queue, or null when SQS is off."
+  value       = var.enable_sqs ? module.queue[0].confirmed_queue_url : null
+}
+
 output "inventory" {
   description = "Ansible inventory generated from this state."
   value       = local_file.inventory.filename

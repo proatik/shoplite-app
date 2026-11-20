@@ -26,6 +26,13 @@ module "backup_bucket" {
   force_destroy  = true
 }
 
+module "queue" {
+  source            = "../../modules/queue"
+  count             = var.enable_sqs ? 1 : 0
+  name              = var.name
+  lambda_source_dir = "${path.root}/../../../services/order-confirmation"
+}
+
 module "alb" {
   source                 = "../../modules/alb"
   name                   = var.name
@@ -53,6 +60,29 @@ module "compute" {
   root_volume_gb              = var.root_volume_gb
   ecr_repository_arns         = module.ecr.repository_arns
   backup_bucket_arn           = var.enable_s3_backups ? module.backup_bucket[0].bucket_arn : null
+}
+
+data "aws_iam_policy_document" "node_sqs" {
+  count = var.enable_sqs ? 1 : 0
+
+  statement {
+    sid       = "UseOrdersQueue"
+    actions   = ["sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:GetQueueUrl"]
+    resources = [module.queue[0].orders_queue_arn]
+  }
+
+  statement {
+    sid       = "SendOrderConfirmed"
+    actions   = ["sqs:SendMessage", "sqs:GetQueueUrl"]
+    resources = [module.queue[0].confirmed_queue_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "node_sqs" {
+  count  = var.enable_sqs ? 1 : 0
+  name   = "use-order-queues"
+  role   = module.compute.node_role_name
+  policy = data.aws_iam_policy_document.node_sqs[0].json
 }
 
 module "bastion" {
