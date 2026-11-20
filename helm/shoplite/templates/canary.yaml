@@ -1,0 +1,53 @@
+{{- if .Values.catalogApi.canary.enabled }}
+# canary releases for catalog-api. The Rollout takes over the pods of the catalog-api Deployment
+# (workloadRef), so the Deployment stays as written. A release first runs on half the pods; if the
+# order error rate passes 5%, the analysis fails and the Rollout aborts back to the stable version.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: catalog-api
+  labels: {{- include "shoplite.labels" "catalog-api" | nindent 4 }}
+  annotations:
+    # the CRD arrives with the argo-rollouts Application, possibly after this chart's first sync.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  replicas: {{ .Values.catalogApi.replicas }}
+  selector:
+    matchLabels: { app.kubernetes.io/name: catalog-api }
+  workloadRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: catalog-api
+    scaleDown: progressively
+  strategy:
+    canary:
+      steps:
+        - setWeight: 50
+        - analysis:
+            templates:
+              - templateName: catalog-api-error-rate
+        - setWeight: 100
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: catalog-api-error-rate
+  labels: {{- include "shoplite.labels" "catalog-api" | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  metrics:
+    # share of POST /orders answered with a 5xx over the last minute; no orders counts as 0, so the
+    # floor on the divisor keeps an idle environment from reading 0/0 (NaN) and failing.
+    - name: order-error-rate
+      interval: 30s
+      count: 4
+      failureLimit: 1
+      successCondition: result[0] < 0.05
+      provider:
+        prometheus:
+          address: {{ .Values.catalogApi.canary.prometheusAddress }}
+          query: |
+            (sum(rate(http_requests_total{namespace="{{ .Release.Namespace }}", method="POST", route="/orders", status=~"5.."}[1m])) or vector(0))
+              / (clamp_min(sum(rate(http_requests_total{namespace="{{ .Release.Namespace }}", method="POST", route="/orders"}[1m])), 0.001) or vector(1))
+{{- end }}

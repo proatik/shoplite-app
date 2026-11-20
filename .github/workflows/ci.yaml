@@ -90,12 +90,14 @@ jobs:
             docker run --rm -i "$HADOLINT_IMAGE" < "services/$service/Dockerfile"
           done
       # the release sets the image tag, so lint supplies a placeholder for the required value.
-      # monitoring adds its own templates, so the chart is linted with it off and on.
+      # monitoring and the canary, which needs it, add their own templates, so the chart is linted
+      # with both off and both on.
       - name: helm lint the chart
         run: |
           for monitoring in false true; do
             docker run --rm -v "$PWD/helm:/charts" "$HELM_IMAGE" lint --strict /charts/shoplite \
-              --set image.tag=lint --set monitoring.enabled="$monitoring"
+              --set image.tag=lint --set monitoring.enabled="$monitoring" \
+              --set catalogApi.canary.enabled="$monitoring"
           done
       - name: build the dashboard manifests
         run: kubectl kustomize monitoring/dashboards > /dev/null
