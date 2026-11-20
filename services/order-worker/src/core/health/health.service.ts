@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { Injectable } from '@nestjs/common';
 
-import { RedisService } from '@/core/redis/redis.service';
+import { OrderQueue } from '@/core/queue/order-queue';
 import { DatabaseService } from '@/core/database/database.service';
 import { DEPENDENCY_CHECK_TIMEOUT_MS } from '@/core/health/health.constants';
 
@@ -16,14 +16,14 @@ export interface Readiness {
 @Injectable()
 export class HealthService {
   constructor(
-    private readonly redis: RedisService,
+    private readonly queue: OrderQueue,
     private readonly database: DatabaseService
   ) {}
 
   async readiness(): Promise<Readiness> {
     const [database, queue] = await Promise.all([
       this.probe(async () => await this.database.db.execute(sql`select 1`)),
-      this.probe(async () => await this.redis.client.ping())
+      this.probe(async () => await this.queue.ping())
     ]);
 
     return {

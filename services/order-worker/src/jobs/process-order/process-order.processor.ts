@@ -6,21 +6,19 @@ import { SpanKind } from '@opentelemetry/api';
 import {
   traced,
   createLogger,
-  ORDER_QUEUE_KEY,
   OrderMessageSchema,
   restoreTraceContext
 } from '@shoplite/shared';
 
-import { RedisService } from '@/core/redis/redis.service';
+import { OrderQueue } from '@/core/queue/order-queue';
 import { MetricsService } from '@/core/metrics/metrics.service';
 import { ProcessOrderService } from '@/jobs/process-order/process-order.service';
 import {
   RETRY_DELAY_MS,
-  CONSUMERS_PER_POD,
-  POP_TIMEOUT_SECONDS
+  CONSUMERS_PER_POD
 } from '@/jobs/process-order/process-order.constants';
 
-import type { Redis } from 'ioredis';
+import type { OrderConsumer } from '@/core/queue/order-queue';
 import type { OrderResult } from '@/core/metrics/metrics.service';
 import type {
   OnApplicationBootstrap,
@@ -34,48 +32,51 @@ export class ProcessOrderProcessor
   private readonly logger = createLogger(ProcessOrderProcessor.name);
   private running = false;
   private loops: Promise<void>[] = [];
-  private connections: Redis[] = [];
+  private consumers: OrderConsumer[] = [];
+  private readonly abort = new AbortController();
 
   constructor(
-    private readonly redis: RedisService,
+    private readonly queue: OrderQueue,
     private readonly metrics: MetricsService,
     private readonly processor: ProcessOrderService
   ) {}
 
   onApplicationBootstrap(): void {
-    // a blocking BRPOP holds its connection, so each consumer gets its own.
-    this.connections = Array.from({ length: CONSUMERS_PER_POD }, () =>
-      this.redis.client.duplicate()
+    this.consumers = Array.from({ length: CONSUMERS_PER_POD }, () =>
+      this.queue.createConsumer()
     );
     this.running = true;
-    this.loops = this.connections.map(
-      async (connection) => await this.consume(connection)
+    this.loops = this.consumers.map(
+      async (consumer) => await this.consume(consumer)
     );
     this.logger.log('order consumers started', {
-      queue: ORDER_QUEUE_KEY,
+      queue: this.queue.name,
       consumers: CONSUMERS_PER_POD
     });
   }
 
   async beforeApplicationShutdown(): Promise<void> {
     this.running = false;
+    this.abort.abort();
     await Promise.all(this.loops);
     await Promise.all(
-      this.connections.map(async (connection) => await connection.quit())
+      this.consumers.map(async (consumer) => await consumer.close())
     );
     this.logger.log('order consumers stopped');
   }
 
-  private async consume(connection: Redis): Promise<void> {
+  private async consume(consumer: OrderConsumer): Promise<void> {
     while (this.running) {
       try {
-        const popped = await connection.brpop(
-          ORDER_QUEUE_KEY,
-          POP_TIMEOUT_SECONDS
-        );
+        const received = await consumer.receive(this.abort.signal);
 
-        if (popped) {
-          await this.handle(popped[1]);
+        if (received) {
+          const isHandled = await this.handle(received.body);
+
+          // a failed order stays queued, so the queue can redeliver it.
+          if (isHandled) {
+            await received.acknowledge();
+          }
         }
       } catch (error) {
         this.logger.error('order queue read failed', error);
@@ -84,24 +85,24 @@ export class ProcessOrderProcessor
     }
   }
 
-  private async handle(raw: string): Promise<void> {
+  private async handle(raw: string): Promise<boolean> {
     const message = OrderMessageSchema.safeParse(parseJson(raw));
 
     if (!message.success) {
       this.logger.error('order message rejected', message.error, { raw });
 
-      return;
+      return true;
     }
 
     const orderId = message.data.order_id;
 
-    await traced(
+    return await traced(
       'order.process',
       {
         kind: SpanKind.CONSUMER,
         attributes: {
-          'messaging.system': 'redis',
-          'messaging.destination.name': ORDER_QUEUE_KEY,
+          'messaging.system': this.queue.system,
+          'messaging.destination.name': this.queue.name,
           'order.id': orderId
         }
       },
@@ -114,6 +115,16 @@ export class ProcessOrderProcessor
           span.setAttribute('order.result', result);
           this.metrics.recordOrder(result, seconds, span.spanContext().traceId);
         }
+
+        if (result === 'completed') {
+          await this.queue.confirm({
+            order_id: orderId,
+            status: 'COMPLETED',
+            completed_at: new Date().toISOString()
+          });
+        }
+
+        return result !== 'error';
       },
       restoreTraceContext(message.data.trace_context)
     );

@@ -1,24 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { SpanKind } from '@opentelemetry/api';
 
-import { traced, ORDER_QUEUE_KEY, captureTraceContext } from '@shoplite/shared';
+import { traced, captureTraceContext } from '@shoplite/shared';
 
-import { RedisService } from '@/core/redis/redis.service';
+import { OrderQueue } from '@/core/queue/order-queue';
 
 import type { OrderMessage } from '@shoplite/shared';
 
 @Injectable()
 export class OrderQueueService {
-  constructor(private readonly redis: RedisService) {}
+  constructor(private readonly queue: OrderQueue) {}
 
   async publish(orderId: number): Promise<void> {
     await traced(
-      `${ORDER_QUEUE_KEY} publish`,
+      `${this.queue.name} publish`,
       {
         kind: SpanKind.PRODUCER,
         attributes: {
-          'messaging.system': 'redis',
-          'messaging.destination.name': ORDER_QUEUE_KEY,
+          'messaging.system': this.queue.system,
+          'messaging.destination.name': this.queue.name,
           'order.id': orderId
         }
       },
@@ -29,7 +29,7 @@ export class OrderQueueService {
           trace_context: captureTraceContext() ?? undefined
         };
 
-        await this.redis.client.lpush(ORDER_QUEUE_KEY, JSON.stringify(message));
+        await this.queue.push(JSON.stringify(message));
       }
     );
   }

@@ -1,5 +1,6 @@
 import { it, vi, expect, describe, beforeEach } from 'vitest';
 
+import { RedisOrderQueue } from '@/core/queue/redis-order-queue';
 import { CONSUMERS_PER_POD } from '@/jobs/process-order/process-order.constants';
 import { ProcessOrderProcessor } from '@/jobs/process-order/process-order.processor';
 
@@ -32,7 +33,7 @@ function consumerWith(messages: (string | null)[]): {
   const redis = { client: { duplicate } };
 
   const consumer = new ProcessOrderProcessor(
-    redis as unknown as RedisService,
+    new RedisOrderQueue(redis as unknown as RedisService),
     metrics as unknown as MetricsService,
     processor as unknown as ProcessOrderService
   );
