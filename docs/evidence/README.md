@@ -532,6 +532,76 @@ QueueBacklog cleared after recovery.
 
 ![Alert resolved](images/q8-07b-slack-resolved.png)
 
+## B2 · Amazon SQS & Lambda
+
+### Terraform apply
+
+14 resources added for SQS, the Lambda and EventBridge; nothing else changed.
+
+![Terraform apply](images/b2-01-terraform-sqs.png)
+
+### Worker on SQS
+
+`QUEUE_BACKEND: sqs` in dev, with orders completing.
+
+![Worker on SQS](images/b2-02-worker-log.png)
+
+### Orders queue
+
+No backlog under load, and a dead-letter queue after 5 tries.
+
+![Orders queue](images/b2-03-sqs-queue.png)
+
+### Lambda
+
+Each completed order becomes an `OrderConfirmed` event.
+
+![Lambda](images/b2-04-lambda-log.png)
+
+### EventBridge
+
+`OrderConfirmed` events from `shoplite.orders`, logged by the rule.
+
+![EventBridge](images/b2-05-eventbridge-order-confirmed.png)
+
+## B3 · Canary Deployment
+
+### Good release
+
+The AnalysisRun for the new version is Successful.
+
+![Good release](images/b3-01-analysis-successful.png)
+
+### Canary completed
+
+50%, then the analysis, then 100%: all 3 steps done.
+
+![Canary completed](images/b3-02-rollout-completed.png)
+
+### Bad release aborted
+
+A release failing half the orders: the analysis failed and the rollout went back to the stable version.
+
+![Bad release aborted](images/b3-03-rollout-aborted.png)
+
+### Measured error rate
+
+About 25% of orders failed during the canary, above the 5% limit.
+
+![Measured error rate](images/b3-04-analysis-failed-values.png)
+
+### Reverted through Git
+
+Dev back to Synced and Healthy after the revert.
+
+![Reverted through Git](images/b3-05-dev-healthy-after-revert.png)
+
+### Prod with the canary
+
+Every Argo CD application Synced and Healthy; the Deployment reads 0/0 under the Rollout.
+
+![Prod with the canary](images/b3-06-prod-synced-healthy.png)
+
 ## B4 · SLO & Burn-Rate Alerting
 
 ### Rules loaded
