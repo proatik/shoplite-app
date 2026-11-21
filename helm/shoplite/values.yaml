@@ -46,6 +46,10 @@ catalogApi:
   chaos:
     latencyMs: 0
     errorRate: 0
+  # canary releases through Argo Rollouts; needs the argo-rollouts controller and Prometheus.
+  canary:
+    enabled: false
+    prometheusAddress: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
 
 orderWorker:
   autoscaling:
