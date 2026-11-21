@@ -2,8 +2,8 @@
 
 A small shop split into three services: a static storefront, a REST API that
 takes orders, and a background worker that completes them through a Redis
-queue. Argo CD configuration lives in the separate `shoplite-gitops`
-repository.
+queue (Amazon SQS on dev, as a bonus). Argo CD configuration lives in the
+separate `shoplite-gitops` repository.
 
 The checkpoint screenshots are published at
 <https://shoplite-evidence.netlify.app/> and kept in
@@ -171,14 +171,15 @@ shoplite-app/
 ├── services/
 │   ├── web/              React and Vite app, served as static files by Nginx
 │   ├── catalog-api/      NestJS REST API, db-init script and seed data
-│   └── order-worker/     NestJS queue consumer
+│   ├── order-worker/     NestJS queue consumer
+│   └── order-confirmation/  Lambda that emits OrderConfirmed (SQS bonus)
 ├── packages/
 │   ├── database/         Drizzle schema and SQL migrations
 │   └── shared/           logger, tracing, metrics and the queue message format
 ├── helm/
 │   └── shoplite/         one chart for the three services, PostgreSQL and Redis
 ├── terraform/
-│   ├── modules/          network, compute, alb, ecr, plus bastion and backup_bucket
+│   ├── modules/          network, compute, alb, ecr, plus bastion, backup_bucket and queue
 │   ├── envs/aws/         the AWS environment, CI roles, budget and Ansible inventory
 │   └── state/            the S3 bucket that holds Terraform state
 ├── ansible/              node hardening, k3s and the backup service
