@@ -102,6 +102,21 @@ Terraform merges `*_override.tf` files over the configuration, so the local back
 without changing tracked code. The state file then lives only on the machine that ran it: run
 `destroy` before the session ends.
 
+## Optional: SQS and Lambda (bonus)
+
+Redis stays the default queue. With `-var enable_sqs=true`, `modules/queue` also builds:
+
+| Resource                                      | Purpose                                                                                                                                                 |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shoplite-orders`, `shoplite-order-confirmed` | encrypted queues (SQS-managed keys, 60 s visibility), each with a dead-letter queue after 5 tries                                                       |
+| `shoplite-order-confirmation`                 | Lambda (Node.js 22, code in `services/order-confirmation/`) reading the confirmed queue in batches and reporting failed records one by one              |
+| `shoplite-order-confirmed` rule and log group | the default EventBridge bus sends every `shoplite.orders` / `OrderConfirmed` event to the log group `/aws/events/shoplite-order-confirmed`, as evidence |
+
+The node role gets `SendMessage`, `ReceiveMessage`, `DeleteMessage`, `GetQueueAttributes` and
+`GetQueueUrl` on the orders queue and `SendMessage` and `GetQueueUrl` on the confirmed queue,
+nothing else. The queue URLs are the
+`orders_queue_url` and `confirmed_queue_url` outputs. CI leaves the switch off.
+
 ## Security
 
 - Nodes have no public addresses and no inbound rule from the internet. The only inbound traffic

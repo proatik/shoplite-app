@@ -65,6 +65,13 @@ orderWorker:
     memoryLeak: false
     slowDb: false
 
+# redis is the default queue; sqs uses the two named queues, which must already exist in the region.
+queue:
+  backend: redis
+  sqsQueueName: shoplite-orders
+  sqsConfirmedQueueName: shoplite-order-confirmed
+  awsRegion: ''
+
 postgres:
   image: postgres:16.4-alpine@sha256:5660c2cbfea50c7a9127d17dc4e48543eedd3d7a41a595a2dfa572471e37e64c
   resources:

@@ -95,6 +95,17 @@ All flags are off by default. Set them in the shell before `make up`.
 | `CHAOS_SLOW_DB`     | `order-worker` | waits 2 seconds before each database update            |
 | `CHAOS_MEMORY_LEAK` | `order-worker` | keeps 256 KiB in memory for every processed order      |
 
+## Queue backend
+
+The queue is the Redis list `orders:pending` unless `QUEUE_BACKEND` is `sqs`. With `sqs`, the AWS
+region and credentials come from the SDK's default chain (`AWS_REGION` and the node's instance role).
+
+| Variable                   | Service                       | Effect                                                                                                      |
+| -------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `QUEUE_BACKEND`            | `catalog-api`, `order-worker` | `redis` (default) or `sqs`                                                                                  |
+| `SQS_QUEUE_NAME`           | `catalog-api`, `order-worker` | the orders queue for `sqs`, looked up by name (default `shoplite-orders`)                                   |
+| `SQS_CONFIRMED_QUEUE_NAME` | `order-worker`                | receives `{ order_id, status, completed_at }` for each completed order (default `shoplite-order-confirmed`) |
+
 ## Deploy to Kubernetes
 
 `helm/shoplite` deploys all five components into one namespace per environment, `shoplite` for prod

@@ -123,6 +123,12 @@ variable "backup_retention_days" {
   default     = 30
 }
 
+variable "enable_sqs" {
+  description = "Create the SQS queues, the order-confirmation Lambda and the EventBridge rule, and let the nodes use the queues. Redis stays the default queue."
+  type        = bool
+  default     = false
+}
+
 variable "budget_limit_usd" {
   description = "Monthly cost budget."
   type        = number

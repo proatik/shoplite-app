@@ -2,7 +2,7 @@ import { it, vi, expect, describe, beforeEach } from 'vitest';
 
 import { MetricsService } from '@/core/metrics/metrics.service';
 
-import type { RedisService } from '@/core/redis/redis.service';
+import type { OrderQueue } from '@/core/queue/order-queue';
 
 const logger = vi.hoisted(() => ({
   log: vi.fn(),
@@ -15,10 +15,10 @@ vi.mock('@shoplite/shared', async (original) => ({
   createLogger: () => logger
 }));
 
-function metricsWith(status: string, depth: number): MetricsService {
-  const client = { status, llen: vi.fn().mockResolvedValue(depth) };
+function metricsWith(depth: () => Promise<number>): MetricsService {
+  const queue = { name: 'orders:pending', depth };
 
-  return new MetricsService({ client } as unknown as RedisService);
+  return new MetricsService(queue as unknown as OrderQueue);
 }
 
 describe('MetricsService', () => {
@@ -26,21 +26,21 @@ describe('MetricsService', () => {
     vi.clearAllMocks();
   });
 
-  it('reports the queue depth while redis is ready', async () => {
-    const output = await metricsWith('ready', 7).registry.metrics();
+  it('reports the queue depth while the queue is reachable', async () => {
+    const output = await metricsWith(async () => 7).registry.metrics();
 
     expect(output).toMatch(/^order_queue_depth\{[^}]*\} 7$/m);
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
-  it('still answers the scrape while redis is down', async () => {
-    const output = await metricsWith('reconnecting', 7).registry.metrics();
+  it('still answers the scrape while the queue is down', async () => {
+    const depth = vi.fn().mockRejectedValue(new Error('redis is not ready'));
+    const output = await metricsWith(depth).registry.metrics();
 
     expect(output).toContain('orders_created_total');
     expect(output).not.toMatch(/^order_queue_depth\{[^}]*\} 7$/m);
-    expect(logger.warn).toHaveBeenCalledWith(
-      'queue depth not read: redis is not ready',
-      { redis_status: 'reconnecting' }
-    );
+    expect(logger.warn).toHaveBeenCalledWith('queue depth not read', {
+      reason: 'redis is not ready'
+    });
   });
 });

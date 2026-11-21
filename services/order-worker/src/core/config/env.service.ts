@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { Env } from '@/core/config/env.schema';
+import type { QueueBackend } from '@shoplite/shared';
 
 @Injectable()
 export class EnvService {
@@ -25,6 +26,18 @@ export class EnvService {
 
   get postgresPoolMax(): number {
     return this.get('POSTGRES_POOL_MAX');
+  }
+
+  get queueBackend(): QueueBackend {
+    return this.get('QUEUE_BACKEND');
+  }
+
+  get sqsQueueName(): string {
+    return this.get('SQS_QUEUE_NAME');
+  }
+
+  get sqsConfirmedQueueName(): string {
+    return this.get('SQS_CONFIRMED_QUEUE_NAME');
   }
 
   get chaosMemoryLeak(): boolean {
