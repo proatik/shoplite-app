@@ -5,6 +5,12 @@ takes orders, and a background worker that completes them through a Redis
 queue. Argo CD configuration lives in the separate `shoplite-gitops`
 repository.
 
+The checkpoint screenshots are published at
+<https://shoplite-evidence.netlify.app/> and kept in
+[docs/evidence](docs/evidence/README.md).
+[docs/BRIEF-MAP.md](docs/BRIEF-MAP.md) maps every brief requirement to its file
+and screenshot.
+
 ## How it works
 
 ```mermaid
@@ -91,7 +97,8 @@ All flags are off by default. Set them in the shell before `make up`.
 
 ## Deploy to Kubernetes
 
-`helm/shoplite` deploys all five components into one namespace:
+`helm/shoplite` deploys all five components into one namespace per environment, `shoplite` for prod
+and `shoplite-dev` for dev:
 
 | Component      | Kind                                | Details                                                                         |
 | -------------- | ----------------------------------- | ------------------------------------------------------------------------------- |
@@ -167,11 +174,13 @@ shoplite-app/
 ├── linux/                sshd_config, systemd units, the firewall script and evidence
 ├── monitoring/
 │   ├── dashboards/       the Golden Signals dashboard, loaded by Grafana's sidecar
-│   ├── alert-rules/      the five alerts as a PrometheusRule
+│   ├── alert-rules/      the five alerts, plus the POST /orders latency SLO
 │   ├── runbooks/         one runbook per alert
 │   └── values/           Helm values for kube-prometheus-stack, Loki, Tempo and Alloy
 ├── docs/
+│   ├── BRIEF-MAP.md      every brief requirement, where it is met and its screenshot
 │   ├── architecture-diagram/  the AWS architecture and its trade-offs
+│   ├── evidence/         the checkpoint screenshots with captions
 │   └── RCA/              the chaos-day root cause analysis
 ├── scripts/
 │   ├── smoke-test.sh     end-to-end check used by make smoke
@@ -186,7 +195,7 @@ shoplite-app/
 
 | Choice                                         | Why                                                                                                                                            |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Images built `FROM scratch`                    | node, musl and the bundled app only: about 140 MB, no shell, run as uid 10001                                                                  |
+| Images built `FROM scratch`                    | node, musl and the bundled app only: catalog-api 140 MB, order-worker 139 MB, no shell, uid 10001                                              |
 | Prices stored in paisa, returned in taka       | integer money in the database; the API divides by 100 so the contract shows BDT                                                                |
 | Placed order ids in `localStorage`             | the API has no accounts, so My orders keeps the ids this browser placed                                                                        |
 | Default database password in compose           | `make up` must work on a clean machine; set `POSTGRES_PASSWORD` to override it                                                                 |

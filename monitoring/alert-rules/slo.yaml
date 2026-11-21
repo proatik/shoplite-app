@@ -1,0 +1,56 @@
+# SLO: 99% of POST /orders requests finish in under 500 ms, over 30 days (a 1% error budget).
+# multi-window burn-rate alerts: the long window proves the burn is real, the short one that it
+# is still happening, so an alert resolves soon after the cause is fixed.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: shoplite-slo
+  labels:
+    app.kubernetes.io/part-of: shoplite
+spec:
+  groups:
+    - name: shoplite-slo
+      rules:
+        # share of POST /orders requests slower than 500 ms, one series per window.
+        - record: shoplite:orders_slow_ratio:rate5m
+          expr: |
+            1 - sum by (namespace) (rate(http_request_duration_seconds_bucket{method="POST", route="/orders", le="0.5"}[5m]))
+              / sum by (namespace) (rate(http_request_duration_seconds_count{method="POST", route="/orders"}[5m]))
+        - record: shoplite:orders_slow_ratio:rate30m
+          expr: |
+            1 - sum by (namespace) (rate(http_request_duration_seconds_bucket{method="POST", route="/orders", le="0.5"}[30m]))
+              / sum by (namespace) (rate(http_request_duration_seconds_count{method="POST", route="/orders"}[30m]))
+        - record: shoplite:orders_slow_ratio:rate1h
+          expr: |
+            1 - sum by (namespace) (rate(http_request_duration_seconds_bucket{method="POST", route="/orders", le="0.5"}[1h]))
+              / sum by (namespace) (rate(http_request_duration_seconds_count{method="POST", route="/orders"}[1h]))
+        - record: shoplite:orders_slow_ratio:rate6h
+          expr: |
+            1 - sum by (namespace) (rate(http_request_duration_seconds_bucket{method="POST", route="/orders", le="0.5"}[6h]))
+              / sum by (namespace) (rate(http_request_duration_seconds_count{method="POST", route="/orders"}[6h]))
+
+        # 14.4 times the budget rate spends 2% of the 30-day budget in one hour.
+        - alert: OrdersLatencyBudgetFastBurn
+          expr: |
+            shoplite:orders_slow_ratio:rate1h > 14.4 * 0.01
+              and shoplite:orders_slow_ratio:rate5m > 14.4 * 0.01
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: POST /orders in {{ $labels.namespace }} burns its latency budget 14 times too fast.
+            description: '{{ $value | humanizePercentage }} of orders took over 500 ms in the last 5 minutes; the 30-day budget lasts about 2 days at this rate.'
+            runbook_url: https://github.com/proatik/shoplite-app/blob/main/monitoring/runbooks/orders-latency-slo.md
+
+        # 6 times the budget rate spends 5% of the 30-day budget in six hours.
+        - alert: OrdersLatencyBudgetSlowBurn
+          expr: |
+            shoplite:orders_slow_ratio:rate6h > 6 * 0.01
+              and shoplite:orders_slow_ratio:rate30m > 6 * 0.01
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: POST /orders in {{ $labels.namespace }} burns its latency budget 6 times too fast.
+            description: '{{ $value | humanizePercentage }} of orders took over 500 ms in the last 30 minutes; the 30-day budget lasts about 5 days at this rate.'
+            runbook_url: https://github.com/proatik/shoplite-app/blob/main/monitoring/runbooks/orders-latency-slo.md

@@ -1,6 +1,6 @@
 # Terraform
 
-Builds the AWS side of ShopLite as the brief's target architecture asks:
+Builds the AWS side of ShopLite:
 
 ```text
 Internet ──► ALB :80 (prod), :8080 (dev) ──► ingress NodePorts 30080, 30081 on the workers
@@ -9,7 +9,7 @@ private subnets, no public addresses ──────┤
  ├─ control plane (k3s server)
  ├─ worker-1 (zone a)
  └─ worker-2 (zone b)
-NAT gateway ──► outbound only · admin access through AWS SSM (or a bastion)
+NAT gateway ──► outbound only · admin access through AWS SSM (default) or a bastion (the lab)
 ECR: web, catalog-api, order-worker · GitHub Actions pushes through OIDC
 ```
 
@@ -50,9 +50,9 @@ terraform output -raw github_variables | gh variable set -R proatik/shoplite-app
 
 State locking uses S3's native lock file (`use_lockfile`), so no DynamoDB table is needed.
 `apply` writes `ansible/inventories/aws/hosts.yaml` (ignored by Git), which reaches every node by
-instance id through an SSM session, or by private address through the bastion. Run
-`terraform destroy` with the same variables when the session ends, and delete the GitHub
-variables, which would otherwise point CI at an account that no longer exists:
+instance id through an SSM session, or by private address through the bastion. When the session
+ends, run `terraform destroy` with the same variables and delete the GitHub variables (they would
+point CI at a dead account):
 
 ```bash
 for name in AWS_REGION AWS_ROLE_ARN AWS_PLAN_ROLE_ARN TF_STATE_BUCKET TF_SSH_PUBLIC_KEY \
@@ -105,8 +105,9 @@ without changing tracked code. The state file then lives only on the machine tha
 ## Security
 
 - Nodes have no public addresses and no inbound rule from the internet. The only inbound traffic
-  is the ingress NodePort from the ALB's security group and the k3s ports between nodes. There is
-  no SSH port: administration goes through SSM sessions. With `admin_access = "bastion"` the nodes
+  is the ingress NodePort from the ALB's security group and the k3s ports between nodes. With the
+  default `admin_access = "ssm"` there is no SSH port: administration goes through SSM sessions.
+  The lab account blocks SSM sessions, so the lab uses `admin_access = "bastion"`: the nodes
   accept SSH from the bastion's security group only, and the bastion from `admin_cidr` only. The
   brief prefers SSM, so the bastion is a fallback, not the default.
 - Instances require IMDSv2 and have encrypted root volumes.

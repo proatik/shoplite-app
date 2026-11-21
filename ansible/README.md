@@ -47,7 +47,7 @@ up, runs everything a second time and checks the result:
 ./test/run.sh
 ```
 
-It fails unless the second run changes nothing and all 23 checks pass:
+It fails unless the second run changes nothing and all its checks pass:
 
 - `deploy` is in `ops`, logs in with its key and uses sudo; a valid key outside `ops` is refused;
   sshd refuses passwords and root and admits only `ops`
@@ -66,6 +66,5 @@ and the S3 upload.
 The test key lives in `~/.cache/shoplite-ansible/`, outside the repository.
 Remove the containers with `docker compose -f test/compose.yaml down`.
 
-When the repository sits on a Windows drive, WSL sees it as world-writable
-and Ansible ignores `ansible.cfg` there; `test/run.sh` sets `ANSIBLE_CONFIG`
-for that reason. Do the same when running playbooks by hand.
+On a Windows drive, WSL treats the repository as world-writable and Ansible ignores `ansible.cfg`;
+`test/run.sh` sets `ANSIBLE_CONFIG` for that, so do the same when running by hand.
