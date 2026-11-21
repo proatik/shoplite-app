@@ -25,8 +25,12 @@ RUN pnpm --filter web run build
 FROM nginxinc/nginx-unprivileged:1.30.6-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03 AS runtime
 
 # the base image lags behind alpine's security fixes, so the build applies them; the final USER drops root again.
+# nginx.org has no 1.30.7 package yet, so alpine's patched nginx replaces it; the unused modules pin the old version.
 USER 0
-RUN apk upgrade --no-cache
+RUN apk upgrade --no-cache \
+  && apk del --no-cache nginx-module-geoip nginx-module-image-filter nginx-module-njs nginx-module-xslt \
+  && apk add --no-cache nginx=1.30.7-r0 \
+  && rm /etc/nginx/nginx.conf.apk-new
 
 # upstream for /api/, resolved at request time.
 ENV API_UPSTREAM=http://catalog-api:3000
