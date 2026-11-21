@@ -5,6 +5,7 @@ takes orders, and a background worker that completes them through a Redis
 queue (Amazon SQS on dev, as a bonus). Argo CD configuration lives in the
 separate `shoplite-gitops` repository.
 
+The recorded demo video is on [Google Drive](https://drive.google.com/file/d/1ihlGHzWlYxOL18fN5GEModzFu-F8e3gW/view?usp=sharing).
 The checkpoint screenshots are published at
 <https://shoplite-evidence.netlify.app/> and kept in
 [docs/evidence](docs/evidence/README.md).
