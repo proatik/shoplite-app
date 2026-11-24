@@ -25,6 +25,8 @@ ECR: web, catalog-api, order-worker · GitHub Actions pushes through OIDC
 | `modules/ecr`           | one repository per image (immutable tags, scan on push, lifecycle) and the GitHub OIDC role that may push only to them, only from `main` |
 | `modules/backup_bucket` | the bucket for database dumps                                                                                                            |
 | `modules/bastion`       | only with `admin_access = "bastion"`: one small host in a public subnet, SSH from `admin_cidr` only, forwarding SSH to the nodes only    |
+| `modules/queue`         | only with `enable_sqs = true`: the SQS queues, the order-confirmation Lambda and the EventBridge rule (below)                            |
+| `modules/eks`           | only with `cluster = "eks"`: the EKS cluster, a managed node group and Pod Identity roles, instead of `compute` and `bastion` (below)    |
 
 Every resource carries `project=shoplite` through the provider's default tags.
 
@@ -112,10 +114,29 @@ Redis stays the default queue. With `-var enable_sqs=true`, `modules/queue` also
 | `shoplite-order-confirmation`                 | Lambda (Node.js 22, code in `services/order-confirmation/`) reading the confirmed queue in batches and reporting failed records one by one              |
 | `shoplite-order-confirmed` rule and log group | the default EventBridge bus sends every `shoplite.orders` / `OrderConfirmed` event to the log group `/aws/events/shoplite-order-confirmed`, as evidence |
 
-The node role gets `SendMessage`, `ReceiveMessage`, `DeleteMessage`, `GetQueueAttributes` and
-`GetQueueUrl` on the orders queue and `SendMessage` and `GetQueueUrl` on the confirmed queue,
-nothing else. The queue URLs are the
+On k3s the node role gets `SendMessage`, `ReceiveMessage`, `DeleteMessage`, `GetQueueAttributes`
+and `GetQueueUrl` on the orders queue and `SendMessage` and `GetQueueUrl` on the confirmed queue,
+nothing else. On EKS the nodes get no queue rights: Pod Identity gives each dev backend its own role
+(below). The queue URLs are the
 `orders_queue_url` and `confirmed_queue_url` outputs. CI leaves the switch off.
+
+## Optional: Amazon EKS (bonus)
+
+k3s on EC2 stays the default, because the Linux hardening and Ansible tasks run on those nodes.
+With `-var cluster=eks` (and `admin_cidr`), `modules/eks` replaces `compute`, `bastion` and the
+Ansible inventory:
+
+| Resource                            | Purpose                                                                                                                                                                                                                                                  |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shoplite` EKS cluster              | control plane in the private subnets; Kubernetes secrets encrypted with a rotating KMS key; all five control-plane log types kept 7 days; the public API endpoint answers `admin_cidr` only                                                              |
+| `shoplite-nodes` managed node group | two Amazon Linux 2023 nodes in the private subnets; their Auto Scaling group joins the same ALB target groups, and the cluster security group opens the ingress NodePorts to the ALB only                                                                |
+| add-ons                             | `vpc-cni` with network policy enforcement, `kube-proxy`, `coredns`, `eks-pod-identity-agent`, and `aws-ebs-csi-driver` for the database and monitoring disks                                                                                             |
+| Pod Identity                        | with `enable_sqs`, the service accounts `shoplite-dev/catalog-api` and `shoplite-dev/order-worker` each get a role with only their queue actions; the EBS driver gets its own role; the node role holds only the EKS worker, CNI and image-pull policies |
+
+`terraform output kubeconfig_command` writes the kubeconfig; kubectl then reaches the API directly,
+so no bastion or tunnel is needed. Bootstrap adds a default `gp3` disk class when it finds the EBS
+driver. Volumes Kubernetes creates are tagged `project=shoplite`, so the teardown can delete them
+after `destroy`. CI keeps the default.
 
 ## Security
 
@@ -139,3 +160,4 @@ Trivy findings that stay on purpose, each ignored inline above its resource with
 | AWS-0054 HTTP listener               | HTTPS on an ALB needs an ACM certificate, which needs a domain; the brief makes the domain optional      |
 | AWS-0104 egress to `0.0.0.0/0`       | limited to 443, 80, 22 and 123/udp through NAT; registries, mirrors, GitHub, SSM and S3 change addresses |
 | AWS-0132 no customer-managed KMS key | buckets use SSE-S3 (AES-256); a customer key needs KMS permissions the lab account may not grant         |
+| AWS-0040, AWS-0041 public EKS API    | EKS only: kubectl runs outside the VPC; the endpoint answers a single admin address (`admin_cidr`)       |
