@@ -1,3 +1,11 @@
+# its own identity, so EKS Pod Identity can give it AWS access without the nodes having any.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: order-worker
+  labels: {{- include "shoplite.labels" "order-worker" | nindent 4 }}
+automountServiceAccountToken: false
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -12,6 +20,7 @@ spec:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
     spec:
+      serviceAccountName: order-worker
       terminationGracePeriodSeconds: {{ .Values.orderWorker.terminationGracePeriodSeconds }}
       securityContext: {{- include "shoplite.podSecurity" 10001 | nindent 8 }}
       containers:

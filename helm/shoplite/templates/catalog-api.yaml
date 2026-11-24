@@ -1,3 +1,11 @@
+# its own identity, so EKS Pod Identity can give it AWS access without the nodes having any.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: catalog-api
+  labels: {{- include "shoplite.labels" "catalog-api" | nindent 4 }}
+automountServiceAccountToken: false
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -23,6 +31,7 @@ spec:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
     spec:
+      serviceAccountName: catalog-api
       securityContext: {{- include "shoplite.podSecurity" 10001 | nindent 8 }}
       # db-init migrates and seeds under an advisory lock, so replicas starting together are safe.
       initContainers:
