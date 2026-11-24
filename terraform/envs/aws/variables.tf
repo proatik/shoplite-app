@@ -36,6 +36,23 @@ variable "ssh_private_key_path" {
   type        = string
 }
 
+variable "cluster" {
+  description = "Kubernetes on the nodes: k3s on EC2 (hardened by Ansible) or Amazon EKS with a managed node group."
+  type        = string
+  default     = "k3s"
+
+  validation {
+    condition     = contains(["k3s", "eks"], var.cluster)
+    error_message = "cluster must be k3s or eks."
+  }
+}
+
+variable "eks_kubernetes_version" {
+  description = "Kubernetes version of the EKS control plane and nodes; used when cluster is eks."
+  type        = string
+  default     = "1.34"
+}
+
 variable "admin_access" {
   description = "How admins reach the private nodes: ssm (preferred, no open port) or bastion, for accounts whose policy blocks Session Manager sessions."
   type        = string
@@ -48,13 +65,13 @@ variable "admin_access" {
 }
 
 variable "admin_cidr" {
-  description = "Only network allowed to ssh to the bastion; required when admin_access is bastion."
+  description = "Only network allowed to ssh to the bastion or reach the EKS API; required when admin_access is bastion or cluster is eks."
   type        = string
   default     = null
 
   validation {
-    condition     = var.admin_access == "ssm" || can(cidrhost(var.admin_cidr, 0))
-    error_message = "admin_cidr must be a CIDR such as 203.0.113.10/32 when admin_access is bastion."
+    condition     = (var.admin_access == "ssm" && var.cluster == "k3s") || can(cidrhost(var.admin_cidr, 0))
+    error_message = "admin_cidr must be a CIDR such as 203.0.113.10/32 when admin_access is bastion or cluster is eks."
   }
 }
 
@@ -65,13 +82,13 @@ variable "control_plane_instance_type" {
 }
 
 variable "worker_instance_type" {
-  description = "Instance type of each worker node."
+  description = "Instance type of each worker node, or of each EKS managed node."
   type        = string
   default     = "t3.large"
 }
 
 variable "worker_count" {
-  description = "Number of worker nodes."
+  description = "Number of worker nodes, or of EKS managed nodes."
   type        = number
   default     = 2
 }
@@ -124,7 +141,7 @@ variable "backup_retention_days" {
 }
 
 variable "enable_sqs" {
-  description = "Create the SQS queues, the order-confirmation Lambda and the EventBridge rule, and let the nodes use the queues. Redis stays the default queue."
+  description = "Create the SQS queues, the order-confirmation Lambda and the EventBridge rule, and let the nodes (k3s) or the app service accounts (EKS Pod Identity) use the queues. Redis stays the default queue."
   type        = bool
   default     = false
 }

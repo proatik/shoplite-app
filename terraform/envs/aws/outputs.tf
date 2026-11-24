@@ -9,13 +9,13 @@ output "dev_url" {
 }
 
 output "control_plane_id" {
-  description = "Instance id of the control plane."
-  value       = module.compute.control_plane.id
+  description = "Instance id of the control plane, or null on EKS."
+  value       = local.k3s ? module.compute[0].control_plane.id : null
 }
 
 output "control_plane_ssh_host" {
   description = "Host ssh connects to for the control plane: its instance id through SSM, or its private address through the bastion."
-  value       = local.ssh_host["control-plane"]
+  value       = local.k3s ? local.ssh_host["control-plane"] : null
 }
 
 output "ssh_proxy" {
@@ -29,8 +29,8 @@ output "bastion_ip" {
 }
 
 output "workers" {
-  description = "Instance id and private address of each worker."
-  value       = module.compute.workers
+  description = "Instance id and private address of each worker, or null on EKS."
+  value       = local.k3s ? module.compute[0].workers : null
 }
 
 output "ecr_repositories" {
@@ -81,6 +81,16 @@ output "confirmed_queue_url" {
 }
 
 output "inventory" {
-  description = "Ansible inventory generated from this state."
-  value       = local_file.inventory.filename
+  description = "Ansible inventory generated from this state, or null on EKS."
+  value       = local.k3s ? local_file.inventory[0].filename : null
+}
+
+output "eks_cluster_name" {
+  description = "Name of the EKS cluster, or null on k3s."
+  value       = local.eks ? module.eks[0].cluster_name : null
+}
+
+output "kubeconfig_command" {
+  description = "Writes the kubeconfig for the EKS cluster, or null on k3s."
+  value       = local.eks ? "aws eks update-kubeconfig --region ${var.region} --name ${module.eks[0].cluster_name} --kubeconfig ~/.kube/shoplite.yaml" : null
 }
