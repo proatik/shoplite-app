@@ -39,7 +39,7 @@ spec:
             severity: critical
           annotations:
             summary: POST /orders in {{ $labels.namespace }} burns its latency budget 14 times too fast.
-            description: '{{ $value | humanizePercentage }} of orders took over 500 ms in the last 5 minutes; the 30-day budget lasts about 2 days at this rate.'
+            description: '{{ $value | humanizePercentage }} of orders took over 500 ms in the last hour, and the last 5 minutes burn as fast; the 30-day budget lasts about 2 days at this rate.'
             runbook_url: https://github.com/proatik/shoplite-app/blob/main/monitoring/runbooks/orders-latency-slo.md
 
         # 6 times the budget rate spends 5% of the 30-day budget in six hours.
@@ -52,5 +52,5 @@ spec:
             severity: warning
           annotations:
             summary: POST /orders in {{ $labels.namespace }} burns its latency budget 6 times too fast.
-            description: '{{ $value | humanizePercentage }} of orders took over 500 ms in the last 30 minutes; the 30-day budget lasts about 5 days at this rate.'
+            description: '{{ $value | humanizePercentage }} of orders took over 500 ms in the last 6 hours, and the last 30 minutes burn as fast; the 30-day budget lasts about 5 days at this rate.'
             runbook_url: https://github.com/proatik/shoplite-app/blob/main/monitoring/runbooks/orders-latency-slo.md
