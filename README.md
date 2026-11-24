@@ -98,7 +98,8 @@ All flags are off by default. Set them in the shell before `make up`.
 ## Queue backend
 
 The queue is the Redis list `orders:pending` unless `QUEUE_BACKEND` is `sqs`. With `sqs`, the AWS
-region and credentials come from the SDK's default chain (`AWS_REGION` and the node's instance role).
+region and credentials come from the SDK's default chain (`AWS_REGION`, and the node's instance role
+on k3s or the pod's own EKS Pod Identity role on EKS).
 
 | Variable                   | Service                       | Effect                                                                                                      |
 | -------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -160,8 +161,8 @@ The signals link to each other, so one order can be followed from an alert to th
 
 ## AWS infrastructure
 
-`terraform/` builds the VPC, the private k3s nodes, the public ALB, the ECR repositories and the
-CI roles; see [terraform/README.md](terraform/README.md) for the steps and the security choices.
+`terraform/` builds the VPC, the private k3s nodes (or, with `cluster = "eks"`, an EKS cluster),
+the public ALB, the ECR repositories and the CI roles; see [terraform/README.md](terraform/README.md) for the steps and the security choices.
 The whole AWS picture is in [docs/architecture-diagram](docs/architecture-diagram/README.md).
 
 ## Repository layout
@@ -179,7 +180,7 @@ shoplite-app/
 ├── helm/
 │   └── shoplite/         one chart for the three services, PostgreSQL and Redis
 ├── terraform/
-│   ├── modules/          network, compute, alb, ecr, plus bastion, backup_bucket and queue
+│   ├── modules/          network, compute, alb, ecr, plus bastion, backup_bucket, queue and eks
 │   ├── envs/aws/         the AWS environment, CI roles, budget and Ansible inventory
 │   └── state/            the S3 bucket that holds Terraform state
 ├── ansible/              node hardening, k3s and the backup service
@@ -216,6 +217,7 @@ shoplite-app/
 | Images built for x86-64                        | the runtime libraries are copied for one architecture, matching the lab and AWS hosts                                                                                                                         |
 | Traefik as the ingress controller              | the brief allows ingress-nginx or Traefik; the community ingress-nginx controller stopped receiving fixes in March 2026, and k3s ships Traefik                                                                |
 | Canary through `workloadRef`                   | an Argo Rollouts `Rollout` drives the catalog-api Deployment's pods, so the Deployment the brief asks for stays (it reads 0/0 live; its 2 replicas run under the Rollout); a 5xx analysis aborts bad releases |
+| k3s by default, EKS as an option               | the Linux and Ansible tasks need nodes we run, so k3s on EC2 stays the default; `cluster = "eks"` runs the same chart and GitOps setup on Amazon EKS, with Pod Identity instead of node-wide AWS rights       |
 | SQS on dev, Redis in prod                      | the brief requires the Redis list `orders:pending`, so prod keeps it and dev shows the SQS bonus; one `QUEUE_BACKEND` switch, no second code path to deploy                                                   |
 | Confirmation send without retry                | if sending a completed order to the confirmed queue fails, the worker logs it and that order's `OrderConfirmed` event is lost, because redelivery skips orders that are no longer pending                     |
 | `db-init` as an init container                 | it migrates and seeds under an advisory lock before `catalog-api` serves, so no Job has to be ordered or recreated on upgrades                                                                                |

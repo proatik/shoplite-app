@@ -106,7 +106,8 @@ spec:
               - { key: app.kubernetes.io/name, operator: In, values: [catalog-api, order-worker] }
 {{- if eq .Values.queue.backend "sqs" }}
 ---
-# the sqs backend needs the AWS API over HTTPS and the instance role from the metadata service.
+# the sqs backend needs the AWS API over HTTPS, and its credentials from the instance metadata
+# service (k3s) or the EKS Pod Identity agent.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -123,6 +124,7 @@ spec:
         - { protocol: TCP, port: 443 }
     - to:
         - ipBlock: { cidr: 169.254.169.254/32 }
+        - ipBlock: { cidr: 169.254.170.23/32 }
       ports:
         - { protocol: TCP, port: 80 }
 {{- end }}

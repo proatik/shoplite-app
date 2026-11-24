@@ -532,6 +532,38 @@ QueueBacklog cleared after recovery.
 
 ![Alert resolved](images/q8-07b-slack-resolved.png)
 
+## B1 · Amazon EKS
+
+### EKS nodes
+
+The EKS cluster's two managed nodes Ready, reached with kubectl from outside the VPC.
+
+![EKS nodes](images/b1-01-eks-cluster-nodes.png)
+
+### Argo CD on EKS
+
+Every Argo CD application Synced and Healthy on EKS, with the dev pods running.
+
+![Argo CD on EKS](images/b1-02-argocd-on-eks.png)
+
+### Pod Identity
+
+Pod Identity associations for catalog-api, order-worker and the EBS driver.
+
+![Pod Identity](images/b1-03-pod-identity.png)
+
+### Queue access per pod
+
+Pod Identity credentials in the worker, no inline policy on the node role, orders completing through SQS.
+
+![Queue access per pod](images/b1-04-worker-sqs-pod-identity.png)
+
+### Shop on EKS
+
+The shop through the ALB, served by the EKS nodes.
+
+![Shop on EKS](images/b1-05-shop-on-eks.png)
+
 ## B2 · Amazon SQS & Lambda
 
 ### Terraform apply

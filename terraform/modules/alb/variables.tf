@@ -19,8 +19,9 @@ variable "public_subnet_ids" {
 }
 
 variable "target_instance_ids" {
-  description = "Nodes that run the ingress controller, by name."
+  description = "Nodes that run the ingress controller, by name; empty when an Auto Scaling group registers the nodes."
   type        = map(string)
+  default     = {}
 }
 
 variable "entry_points" {
